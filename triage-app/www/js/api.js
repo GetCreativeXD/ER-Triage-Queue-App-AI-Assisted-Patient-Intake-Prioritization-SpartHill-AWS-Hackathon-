@@ -64,4 +64,5 @@ export const triageApi = {
   confirmPriority(id) { return request(`/api/queue/${encodeURIComponent(id)}/confirm`, { method: "POST" }); },
   sortPatient(id, priority) { return request(`/api/queue/${encodeURIComponent(id)}/override`, { method: "POST", body: { priority, note: "Sorted from triage app." } }); },
   setStatus(id, status) { return request(`/api/queue/${encodeURIComponent(id)}/status`, { method: "POST", body: { status } }); },
+  deletePatient(id) { return request(`/api/queue/${encodeURIComponent(id)}`, { method: "DELETE" }); },
 };

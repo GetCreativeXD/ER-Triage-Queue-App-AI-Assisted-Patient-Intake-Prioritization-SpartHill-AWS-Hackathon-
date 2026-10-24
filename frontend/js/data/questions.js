@@ -4,16 +4,23 @@
 // One question per step keeps the flow calm for stressed patients. Each
 // question declares a `type` that tells the intake screen how to render it
 // and, where relevant, how its answer feeds the deterministic queue rules
-// (via the `signal` field). Editing triage inputs means editing this list.
+// (via the `signal` field).
+//
+// IMPORTANT (language lock): all patient-facing text lives in i18n.js keyed by
+// language code. Questions reference those keys (promptKey, helpKey, optionKeys)
+// so the whole form stays in the language the patient chose on the welcome
+// screen and NEVER reverts to English - including the success screen.
 //
 // Every question allows voice: the mic sits below the question content on
 // every step (handled by the intake screen, not per-question flags).
 // =========================================================================
 
-// Condensed warning-sign categories. The brief asks for 4-5 boxes with short
-// labels (3-5 words each) plus a "None of these" escape that lets the patient
-// speak or type what they feel. Each box maps to the critical warning-sign ids
-// the deterministic queue rules already understand.
+// Condensed warning-sign categories. These are NOT shown as an intake question
+// anymore (the brief excludes "Do you have any of these right now?" from the
+// patient form), but the post-intake status/update screen still lets a waiting
+// patient flag them, so the data is kept here for that screen to import. Each
+// box maps to the critical warning-sign ids the deterministic queue rules
+// already understand.
 export const WARNING_SIGNS = [
   { id: "breathing-or-chest", label: "Breathing or chest pain", maps: ["severe-breathing-difficulty", "severe-chest-discomfort"] },
   { id: "fainting-or-confusion", label: "Fainting or confusion", maps: ["fainting", "confusion"] },
@@ -22,42 +29,87 @@ export const WARNING_SIGNS = [
   { id: "allergic-reaction", label: "Severe allergic reaction", maps: ["severe-allergic-reaction"] },
 ];
 
-// Options shown when the patient picks "Longer" on the onset question.
-export const ONSET_LONGER_OPTIONS = [
-  { label: "2-3 weeks ago", value: "2-3 weeks ago" },
-  { label: "1 month ago", value: "1 month ago" },
-  { label: "2 months+", value: "2 months+" },
+// Severity 1-10 colour gradient (light green -> dark red). Exact hex values
+// are mandated by the brief. Index 0 is level 1, index 9 is level 10.
+export const SEVERITY_COLORS = [
+  "#D9F7BE", // 1  minimal discomfort
+  "#B7EB8F", // 2
+  "#95DE64", // 3
+  "#D3F261", // 4
+  "#FFEC3D", // 5
+  "#FFC53D", // 6
+  "#FA8C16", // 7
+  "#D46B08", // 8
+  "#F5222D", // 9
+  "#A8071A", // 10 extreme pain
 ];
 
+// Options shown when the patient picks "Longer" on the onset question.
+// Values are stable keys; labels are localized in i18n.js (onsetLonger.*).
+export const ONSET_LONGER_OPTIONS = [
+  { value: "2-3 weeks ago", key: "onset.longer.2to3weeks" },
+  { value: "1 month ago", key: "onset.longer.1month" },
+  { value: "2 months+", key: "onset.longer.2monthsPlus" },
+];
+
+// Stable option values for the multi-choice symptom question. Labels are
+// localized via i18n (symptom.*). The value is what the nurse view reads.
+export const SYMPTOM_OPTIONS = [
+  { value: "Chest pain", key: "symptom.chestPain" },
+  { value: "Breathing problem", key: "symptom.breathing" },
+  { value: "Injury", key: "symptom.injury" },
+  { value: "Abdominal pain", key: "symptom.abdominal" },
+  { value: "Fever", key: "symptom.fever" },
+  { value: "Headache", key: "symptom.headache" },
+];
+
+// Stable option values for the onset question.
+export const ONSET_OPTIONS = [
+  { value: "Less than 1 hour ago", key: "onset.lessThanHour" },
+  { value: "Today", key: "onset.today" },
+  { value: "This week", key: "onset.thisWeek" },
+  { value: "Longer", key: "onset.longer" },
+];
+
+// Stable option values for the trend question.
+export const TREND_OPTIONS = [
+  { value: "worsening", key: "trend.worse" },
+  { value: "stable", key: "trend.same" },
+  { value: "improving", key: "trend.better" },
+];
+
+// Question list. Order matches the brief:
+//   1 name, 2 symptoms, 3 severity, 4 onset, 5 trend, 6 description.
+// (The old "Do you have any of these right now?" warning-signs question is
+//  intentionally excluded per the brief.)
 export const QUESTIONS = [
   {
     id: "name",
     type: "name",
-    prompt: "What is your name?",
-    help: "Enter your first and last name.",
+    promptKey: "q.name.prompt",
+    helpKey: "q.name.help",
   },
   {
     id: "main-complaint",
     type: "multi-choice",
-    prompt: "What is the main reason for your visit?",
-    help: "Select all that apply.",
-    options: ["Chest pain", "Breathing problem", "Injury", "Abdominal pain", "Fever", "Headache"],
-    // When "Other" is chosen the patient gets a free-text box to describe it.
+    promptKey: "q.symptoms.prompt",
+    helpKey: "q.symptoms.help",
+    options: SYMPTOM_OPTIONS,
     allowOther: true,
   },
   {
     id: "severity",
     type: "severity",
-    prompt: "How severe is your pain or discomfort right now?",
-    help: "0 means none, 10 means the worst you can imagine.",
-    min: 0, max: 10,
+    promptKey: "q.severity.prompt",
+    helpKey: "q.severity.help",
+    min: 1, max: 10,
     signal: "severity", // feeds queue rules
   },
   {
     id: "onset",
     type: "choice-with-detail",
-    prompt: "When did your symptoms start?",
-    options: ["Less than 1 hour ago", "Today", "This week", "Longer"],
+    promptKey: "q.onset.prompt",
+    options: ONSET_OPTIONS,
     // Picking this option reveals a dropdown of longer ranges.
     detailFor: "Longer",
     detailOptions: ONSET_LONGER_OPTIONS,
@@ -65,26 +117,14 @@ export const QUESTIONS = [
   {
     id: "trend",
     type: "choice",
-    prompt: "Are your symptoms getting better, worse, or staying the same?",
-    options: [
-      { label: "Worse", value: "worsening" },
-      { label: "Same", value: "stable" },
-      { label: "Better", value: "improving" },
-    ],
+    promptKey: "q.trend.prompt",
+    options: TREND_OPTIONS,
     signal: "trend",
-  },
-  {
-    id: "warning-signs",
-    type: "warning-multi",
-    prompt: "Do you have any of these right now?",
-    help: "Select all that apply, or choose \"None of these\" to describe it yourself.",
-    options: WARNING_SIGNS,
-    signal: "warningSigns",
   },
   {
     id: "description",
     type: "text",
-    prompt: "In your own words, what happened?",
-    help: "You can type or use the microphone.",
+    promptKey: "q.description.prompt",
+    helpKey: "q.description.help",
   },
 ];

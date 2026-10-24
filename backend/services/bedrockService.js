@@ -137,7 +137,7 @@ export const bedrockService = {
   /** Identify intake questions the patient left blank or vague. */
   async identifyMissingIntakeInformation(responses) {
     const answered = new Set((responses || []).map((r) => r.questionId));
-    const expected = ["main-complaint", "severity", "onset", "warning-signs"];
+    const expected = ["name", "main-complaint", "severity", "onset", "trend", "description"];
     return expected.filter((q) => !answered.has(q));
   },
 

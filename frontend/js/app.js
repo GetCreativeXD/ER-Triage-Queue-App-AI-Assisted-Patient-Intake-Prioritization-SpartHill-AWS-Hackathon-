@@ -12,7 +12,6 @@ import { renderWelcome } from "./screens/welcome.js";
 import { renderIntake } from "./screens/intake.js";
 import { renderDone } from "./screens/done.js";
 import { renderStatus } from "./screens/status.js";
-import { renderNurse } from "./screens/nurse.js";
 
 // Demo data is seeded server-side on boot; nothing to do here.
 api.ensureSeed();
@@ -26,7 +25,6 @@ const routes = {
   "/intake": renderIntake,     // #/intake/:sessionId
   "/done": renderDone,         // #/done/:sessionId  (success + patient number)
   "/status": renderStatus,     // #/status/:sessionId
-  "/nurse": renderNurse,
 };
 
 /** Parse the current hash into { path, param }. */

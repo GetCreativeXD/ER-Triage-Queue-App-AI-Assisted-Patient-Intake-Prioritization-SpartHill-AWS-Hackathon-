@@ -12,10 +12,12 @@
 
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 import { TranscribeStreamingClient } from "@aws-sdk/client-transcribe-streaming";
+import { TranslateClient } from "@aws-sdk/client-translate";
 import { config } from "../config.js";
 
 let _bedrock = null;
 let _transcribe = null;
+let _translate = null;
 
 /** Memoized Bedrock Runtime client. */
 export function getBedrockClient() {
@@ -31,4 +33,12 @@ export function getTranscribeClient() {
     _transcribe = new TranscribeStreamingClient({ region: config.aws.region });
   }
   return _transcribe;
+}
+
+/** Memoized Amazon Translate client (free-text -> English for triage staff). */
+export function getTranslateClient() {
+  if (!_translate) {
+    _translate = new TranslateClient({ region: config.aws.region });
+  }
+  return _translate;
 }

@@ -17,6 +17,7 @@ import {
 import { store } from "./store.js";
 import { recommendPriority, sortQueue, isEscalation } from "./queueRules.js";
 import { bedrockService } from "./bedrockService.js";
+import { translateToEnglish } from "./translateService.js";
 
 export const triageService = {
   // ---- Sessions --------------------------------------------------------
@@ -227,13 +228,58 @@ export const triageService = {
     return store.getSession(sessionId);
   },
 
+  /** Permanently delete a patient from the system (triage "Delete patient"). */
+  deletePatient(sessionId) {
+    const existed = store.removeSession(sessionId);
+    if (existed) {
+      store.addAudit(createAuditRecord({
+        actor: "nurse", action: "patient-deleted", sessionRef: sessionId,
+        reason: "Patient removed from the triage dashboard.",
+      }));
+    }
+    return { ok: existed };
+  },
+
   // ---- Read helpers for the detail panel ------------------------------
-  getPatientDetail(sessionId) {
+  async getPatientDetail(sessionId) {
     const session = store.getSession(sessionId);
     if (!session) return null;
+
+    const lang = session.preferredLanguage || "en";
+    const raw = store.intakeForSession(sessionId);
+
+    // The triage dashboard always reads in English. Choice answers are already
+    // stored as English values by the patient form; only free text needs
+    // translating. We keep the original alongside the English version.
+    // Amazon Translate is async, so translate every answer in parallel.
+    const intake = await Promise.all(raw.map(async (r) => {
+      const answerText = String(r.answer ?? "");
+      const answerEnglish = await translateToEnglish(answerText, lang);
+      return { ...r, answerOriginal: answerText, answerEnglish };
+    }));
+
+    // Question 6 of the patient form is the free-text "in your own words"
+    // description. The triage view shows what was EXACTLY said, translated to
+    // English when the patient used another language.
+    const descResp = raw.find((r) => r.questionId === "description");
+    const question6Original = descResp ? String(descResp.answer ?? "") : "";
+    const question6English = await translateToEnglish(question6Original, lang);
+
+    // A concise overall OVERVIEW of the intake - never a copy of the patient's
+    // words. Only a genuine Bedrock summary (which rephrases) is used directly;
+    // in demo mode `aiSummary` is just the trimmed raw description, so we build
+    // a structured English overview from the answers instead.
+    const summary = (bedrockService.isConfigured() && session.aiSummary)
+      ? await translateToEnglish(session.aiSummary, lang)
+      : buildFallbackSummary(intake);
+
     return {
       session,
-      intake: store.intakeForSession(sessionId),
+      intake,
+      summary,
+      question6Original,
+      question6English,
+      language: lang,
       updates: store.updatesForSession(sessionId),
       audit: store.auditForSession(sessionId),
     };
@@ -243,3 +289,25 @@ export const triageService = {
   getNotifications() { return store.allNotifications(); },
   acknowledgeNotification(id) { return store.acknowledgeNotification(id); },
 };
+
+/**
+ * Build a short English summary of an intake when no AI summary is available.
+ * It paraphrases the structured answers rather than quoting the free text, so
+ * the triage "Summary" reads as an overview, not a copy of what was said.
+ */
+function buildFallbackSummary(intake) {
+  const by = (id) => intake.find((r) => r.questionId === id)?.answerEnglish || "";
+  const symptoms = by("main-complaint");
+  const severity = by("severity");
+  const onset = by("onset");
+  const trendRaw = by("trend");
+  const trend = { worsening: "worsening", improving: "improving", stable: "staying the same" }[trendRaw] || trendRaw;
+
+  const parts = [];
+  if (symptoms) parts.push(`Reports ${symptoms.toLowerCase()}`);
+  if (severity) parts.push(`severity ${severity}/10`);
+  if (onset) parts.push(`started ${onset.toLowerCase()}`);
+  if (trend) parts.push(`symptoms ${trend}`);
+  if (!parts.length) return "No intake details were provided.";
+  return parts.join(", ") + ".";
+}

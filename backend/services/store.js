@@ -93,6 +93,16 @@ export const store = {
   // ---- Sessions --------------------------------------------------------
   addSession(session) { state.sessions.push(session); save(); return session; },
   getSession(id) { return state.sessions.find((s) => s.id === id) || null; },
+  /** Permanently remove a session and all of its related records. */
+  removeSession(id) {
+    const before = state.sessions.length;
+    state.sessions = state.sessions.filter((s) => s.id !== id);
+    state.intake = state.intake.filter((r) => r.sessionId !== id);
+    state.updates = state.updates.filter((u) => u.sessionId !== id);
+    state.notifications = state.notifications.filter((n) => n.sessionId !== id);
+    save();
+    return before !== state.sessions.length;
+  },
   getSessionByCode(code) { return state.sessions.find((s) => s.sessionCode === code) || null; },
   allSessions() { return [...state.sessions]; },
   updateSession(id, patch) {

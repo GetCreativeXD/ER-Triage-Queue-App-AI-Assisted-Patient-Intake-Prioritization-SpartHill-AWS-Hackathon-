@@ -20,6 +20,7 @@ import { api } from "./api.js";
 import { config } from "./config.js";
 import { bedrockService } from "./services/bedrockService.js";
 import { transcribeService } from "./services/transcribeService.js";
+import { translateService } from "./services/translateService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
@@ -51,6 +52,7 @@ app.get("/api/health", (req, res) => {
     region: config.aws.region,
     bedrock: { enabled: bedrockService.isConfigured(), model: config.aws.bedrockModelId },
     transcribe: { enabled: transcribeService.isConfigured(), mode: transcribeService.mode() },
+    translate: { enabled: translateService.isConfigured() },
   });
 });
 
@@ -79,6 +81,7 @@ app.get("/api/queue/:sessionId", h((req) => api.getPatientDetail(req.params.sess
 app.post("/api/queue/:sessionId/confirm", h((req) => api.confirmPriority(req.params.sessionId)));
 app.post("/api/queue/:sessionId/override", h((req) => api.overridePriority(req.params.sessionId, req.body.priority, req.body.note)));
 app.post("/api/queue/:sessionId/status", h((req) => api.setStatus(req.params.sessionId, req.body.status)));
+app.delete("/api/queue/:sessionId", h((req) => api.deletePatient(req.params.sessionId)));
 
 // ---- Notifications ------------------------------------------------------
 app.get("/api/notifications", h(() => api.getNotifications()));
@@ -119,5 +122,6 @@ app.listen(port, () => {
   console.log(`  Triage app:    http://localhost:${port}/triage-app/`);
   console.log(`  Region:  ${config.aws.region}`);
   console.log(`  Bedrock:    ${bedrockService.isConfigured() ? "LIVE (" + config.aws.bedrockModelId + ")" : "demo mode"}`);
-  console.log(`  Transcribe: ${transcribeService.isConfigured() ? "LIVE (" + transcribeService.mode() + ")" : "demo mode"}\n`);
+  console.log(`  Transcribe: ${transcribeService.isConfigured() ? "LIVE (" + transcribeService.mode() + ")" : "demo mode"}`);
+  console.log(`  Translate:  ${translateService.isConfigured() ? "LIVE" : "demo mode (offline dictionary)"}\n`);
 });

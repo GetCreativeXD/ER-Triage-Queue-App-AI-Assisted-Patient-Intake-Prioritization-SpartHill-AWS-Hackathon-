@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="InTake logo">
+  <!-- Final logo: vivid-orange rounded square, centered in the 512x512 canvas
+       (transparent outside it). Box center = (256, 256). -->
+  <rect x="56" y="56" width="400" height="400" rx="52" ry="52" fill="#F47B20"/>
+
+  <!-- Crossed bandages + perforations, all drawn symmetrically about the
+       canvas center (256,256) and rotated as a group so the whole mark is
+       perfectly centered within the orange box. -->
+  <g transform="rotate(45 256 256)">
+    <!-- Two crossed bandages as rounded white line art. Each rect is centered
+         on (256,256): x = 256 - w/2, y = 256 - h/2. -->
+    <g fill="none" stroke="#ffffff" stroke-width="13" stroke-linejoin="round">
+      <!-- Bandage 1 (horizontal within the rotated group). -->
+      <rect x="66" y="210" width="380" height="92" rx="46" ry="46"/>
+      <!-- Bandage 2 (vertical within the rotated group). -->
+      <rect x="210" y="66" width="92" height="380" rx="46" ry="46"/>
+      <!-- Center pad where the two bandages overlap. -->
+      <rect x="206" y="206" width="100" height="100" rx="16" ry="16"/>
+    </g>
+
+    <!-- Perforation marks on the four bandage ends (white), mirrored so the
+         pattern is identical on every arm. -->
+    <g fill="#ffffff">
+      <!-- left arm -->
+      <circle cx="120" cy="238" r="6"/><circle cx="120" cy="274" r="6"/>
+      <circle cx="150" cy="222" r="6"/><circle cx="150" cy="256" r="6"/>
+      <circle cx="150" cy="290" r="6"/>
+      <!-- right arm -->
+      <circle cx="392" cy="238" r="6"/><circle cx="392" cy="274" r="6"/>
+      <circle cx="362" cy="222" r="6"/><circle cx="362" cy="256" r="6"/>
+      <circle cx="362" cy="290" r="6"/>
+      <!-- top arm -->
+      <circle cx="238" cy="120" r="6"/><circle cx="274" cy="120" r="6"/>
+      <circle cx="222" cy="150" r="6"/><circle cx="256" cy="150" r="6"/>
+      <circle cx="290" cy="150" r="6"/>
+      <!-- bottom arm -->
+      <circle cx="238" cy="392" r="6"/><circle cx="274" cy="392" r="6"/>
+      <circle cx="222" cy="362" r="6"/><circle cx="256" cy="362" r="6"/>
+      <circle cx="290" cy="362" r="6"/>
+    </g>
+  </g>
+</svg>

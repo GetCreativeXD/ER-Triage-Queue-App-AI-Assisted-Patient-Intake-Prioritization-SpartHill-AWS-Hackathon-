@@ -5,17 +5,26 @@
 // controls. Answers are kept in a module-level draft keyed by session id, so
 // going back/forward preserves progress (accessibility requirement).
 //
-// Every question shows a microphone BELOW its content for speaking the answer
-// (live transcription + accurate Amazon Transcribe on stop). The chosen
-// language is locked for the whole flow. When the last question is answered,
-// we submit the intake and show the success screen with the patient number.
+// Every question shows a microphone BELOW its content for speaking the answer.
+// What the mic does depends on the question:
+//   - name / symptoms "Other" / description : fills a text field
+//   - severity   : speak a number 1-10 -> that circular button is pressed
+//   - onset      : speak an option on screen -> that button is pressed; if the
+//                  spoken phrase is NOT one of the options, it is typed into a
+//                  free-text box shown below the options
+//   - trend      : speak "better/worse/same" -> that button is pressed
+//
+// ALL patient-facing text is localized via i18n (t()) using the language the
+// patient chose on the welcome screen. It is locked for the whole flow and the
+// success screen - it never reverts to English.
 // =========================================================================
 
 import { el, mount, navigate } from "../services/dom.js";
-import { QUESTIONS, WARNING_SIGNS } from "../data/questions.js";
+import { QUESTIONS } from "../data/questions.js";
+import { SEVERITY_COLORS } from "../data/questions.js";
 import { api } from "../services/apiClient.js";
 import { voiceService } from "../services/voiceService.js";
-import { getLanguage } from "../services/i18n.js";
+import { getLanguage, t } from "../services/i18n.js";
 
 // Draft answers survive back/forward navigation within a session.
 // Shape: { [sessionId]: { step, answers: { questionId: { answer, inputMethod, transcriptConfidence } } } }
@@ -38,19 +47,31 @@ export async function renderIntake(sessionId) {
   ]);
 
   // ---- Answer control (depends on question type) -----------------------
-  const { control, getValue, getConfidence, spokenTarget } = buildControl(q, draft);
+  const { control, getValue, getConfidence, spokenTarget, suppressSharedMic } = buildControl(q, draft);
 
   const error = el("p", { class: "error-text", text: "" });
 
   // ---- Microphone (below every question) --------------------------------
-  const micStatus = el("p", { class: "subtle center mic-status", text: "Tap the mic and speak, or type your answer." });
-  const { button: micBtn } = voiceService.createMicWidget({
-    language: getLanguage(),
-    getBaseText: spokenTarget ? spokenTarget.getBase : undefined,
-    onText: spokenTarget ? spokenTarget.setText : undefined,
-    onStatus: (m) => { micStatus.textContent = m; },
-  });
-  const micBlock = el("div", { class: "mic-block center stack" }, [micBtn, micStatus]);
+  // Some questions (e.g. name) manage their own per-field mics so a single
+  // shared mic does not write into more than one box at once. Those opt out of
+  // the shared mic via `suppressSharedMic`.
+  let micBlock = null;
+  if (!suppressSharedMic) {
+    const micStatus = el("p", { class: "subtle center mic-status", text: t("micHint") });
+    // Question 6 (the free-text "in your own words" description) keeps the mic
+    // ON for a full 15 seconds after the patient stops speaking before it turns
+    // off, so they have time to gather their thoughts. Every other question
+    // uses the shorter 1.5s window.
+    const silenceMs = q.id === "description" ? 15000 : 1500;
+    const { button: micBtn } = voiceService.createMicWidget({
+      language: getLanguage(),
+      getBaseText: spokenTarget ? spokenTarget.getBase : undefined,
+      onText: spokenTarget ? spokenTarget.setText : undefined,
+      onStatus: (m) => { micStatus.textContent = m; },
+      silenceMs,
+    });
+    micBlock = el("div", { class: "mic-block center stack" }, [micBtn, micStatus]);
+  }
 
   /** Save the current answer, advancing or finishing. */
   async function next() {
@@ -97,22 +118,23 @@ export async function renderIntake(sessionId) {
       clearDraft(sessionId);
       navigate(`/done/${sessionId}`);
     } catch {
-      error.textContent = "Could not submit. Please try again.";
+      error.textContent = t("submitError");
     }
   }
 
   const isLast = draft.step === QUESTIONS.length - 1;
+  const helpText = q.helpKey ? t(q.helpKey) : null;
   const card = el("div", { class: "card stack" }, [
     progress,
-    el("p", { class: "subtle", text: `Question ${draft.step + 1} of ${QUESTIONS.length}` }),
-    el("h1", { text: q.prompt }),
-    q.help ? el("p", { class: "subtle", text: q.help }) : null,
+    el("p", { class: "subtle", text: t("questionCounter", { current: draft.step + 1, total: QUESTIONS.length }) }),
+    el("h1", { text: t(q.promptKey) }),
+    helpText ? el("p", { class: "subtle", text: helpText }) : null,
     control,
     error,
     micBlock,
     el("div", { class: "row" }, [
-      el("button", { class: "btn btn-outline", onClick: back }, "Back"),
-      el("button", { class: "btn btn-primary", style: "flex:1", onClick: next }, isLast ? "Submit" : "Next"),
+      el("button", { class: "btn btn-outline", onClick: back }, t("back")),
+      el("button", { class: "btn btn-primary", style: "flex:1", onClick: next }, isLast ? t("submit") : t("next")),
     ]),
   ]);
 
@@ -123,81 +145,128 @@ export async function renderIntake(sessionId) {
 // Controls
 // =========================================================================
 
+/** Normalize text for loose spoken-phrase matching (lowercase, no accents). */
+function norm(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
 /**
  * Build the right input control for a question type and return accessors.
  * Returns:
  *   control       - the DOM node
  *   getValue      - () => current answer value
  *   getConfidence - () => transcript confidence (text questions only)
- *   spokenTarget  - { getBase, setText } for questions where the mic fills a
- *                   text field (null for pure button questions)
+ *   spokenTarget  - { getBase, setText } describing what the mic does for this
+ *                   question (press a button, or fill a text field)
  */
 function buildControl(q, draft) {
   const prior = draft.answers[q.id]?.answer;
 
   // ---- Name (first + last) --------------------------------------------
+  // Each field has its OWN mic that records ONLY into that field, so speaking a
+  // name never fills both boxes at once. The mic auto-stops after a short pause
+  // (handled by the voice widget's silence timer).
   if (q.type === "name") {
-    const first = el("input", { class: "input", type: "text", placeholder: "First name", value: prior?.firstName || "", autocomplete: "given-name" });
-    const last = el("input", { class: "input", type: "text", placeholder: "Last name", value: prior?.lastName || "", autocomplete: "family-name" });
+    const first = el("input", { class: "input", type: "text", placeholder: t("name.firstPlaceholder"), value: prior?.firstName || "", autocomplete: "given-name" });
+    const last = el("input", { class: "input", type: "text", placeholder: t("name.lastPlaceholder"), value: prior?.lastName || "", autocomplete: "family-name" });
+
+    // Build a labeled field paired with its own compact mic. The mic writes
+    // only to this input; other fields are untouched.
+    const makeField = (labelKey, input) => {
+      const { button: mic } = voiceService.createMicWidget({
+        language: getLanguage(),
+        getBaseText: () => "",            // name fields replace, not append
+        onText: (text) => { input.value = String(text).trim(); },
+      });
+      return el("div", { class: "stack" }, [
+        el("label", { text: t(labelKey) }),
+        el("div", { class: "field-with-mic" }, [input, mic]),
+      ]);
+    };
+
     const wrap = el("div", { class: "stack" }, [
-      el("label", { text: "First name" }), first,
-      el("label", { text: "Last name" }), last,
+      makeField("name.firstLabel", first),
+      makeField("name.lastLabel", last),
     ]);
     wrap.dataset.inputMethod = "typed";
-    // The mic fills the name fields: whichever is empty gets the spoken text.
-    const spokenTarget = {
-      getBase: () => "",
-      setText: (text) => {
-        const parts = String(text).trim().split(/\s+/);
-        if (!first.value) first.value = parts.shift() || "";
-        last.value = parts.join(" ") || last.value;
-      },
-    };
+
     return {
       control: wrap,
       getValue: () => ({ firstName: first.value.trim(), lastName: last.value.trim() }),
-      spokenTarget,
+      suppressSharedMic: true, // per-field mics replace the shared one here
     };
   }
 
-  // ---- Main reason: select all that apply (+ "Other" text) ------------
+  // ---- Symptoms: select all that apply (+ "Other" text) ----------------
+  // Voice: each spoken symptom that matches an on-screen option presses that
+  // option's button. Any spoken words that match NO option are placed in the
+  // "Other" text box.
   if (q.type === "multi-choice") {
     const selected = new Set(Array.isArray(prior?.selected) ? prior.selected : []);
     const container = el("div", { class: "grid-options" });
+    const optionMatchers = []; // { value, label, setOn }
     q.options.forEach((opt) => {
-      const btn = el("button", { class: "btn btn-outline choice", text: opt });
-      const sync = () => btn.classList.toggle("selected", selected.has(opt));
+      const label = t(opt.key);
+      const btn = el("button", { class: "btn btn-outline choice", text: label });
+      const sync = () => btn.classList.toggle("selected", selected.has(opt.value));
       btn.addEventListener("click", () => {
-        selected.has(opt) ? selected.delete(opt) : selected.add(opt);
+        selected.has(opt.value) ? selected.delete(opt.value) : selected.add(opt.value);
         sync();
       });
       sync();
       container.appendChild(btn);
+      optionMatchers.push({ value: opt.value, label, setOn: () => { selected.add(opt.value); sync(); } });
     });
 
-    // "Other" button reveals a text response (per the brief).
+    // "Other" button reveals a text response.
     let otherText = prior?.other || "";
-    const otherInput = el("textarea", { class: "input", placeholder: "Please describe the reason for your visit", text: otherText });
+    const otherInput = el("textarea", { class: "input", placeholder: t("symptom.otherPlaceholder"), text: otherText });
     const otherWrap = el("div", { class: "stack", style: "display:none" }, [otherInput]);
     otherInput.addEventListener("input", () => { otherText = otherInput.value; });
 
-    const otherBtn = el("button", { class: "btn btn-outline choice", text: "Other" });
-    const otherOn = Boolean(prior?.otherOn);
+    const otherBtn = el("button", { class: "btn btn-outline choice", text: t("symptom.other") });
+    const otherState = { on: Boolean(prior?.otherOn) };
     const syncOther = () => {
       otherBtn.classList.toggle("selected", otherState.on);
       otherWrap.style.display = otherState.on ? "" : "none";
     };
-    const otherState = { on: otherOn };
     otherBtn.addEventListener("click", () => { otherState.on = !otherState.on; syncOther(); });
     container.appendChild(otherBtn);
-    if (otherOn) syncOther();
+    syncOther();
 
     const wrap = el("div", { class: "stack" }, [container, otherWrap]);
     wrap.dataset.inputMethod = "selected";
 
     const spokenTarget = {
-      getBase: () => otherInput.value,
-      setText: (text) => { otherState.on = true; syncOther(); otherInput.value = text; otherText = text; },
+      getBase: () => "",
+      // Press every option the patient named; collect anything unmatched into
+      // "Other". Spoken phrases may list several symptoms separated by commas,
+      // "and", or "y"/"et"/"和" in the supported languages.
+      setText: (text) => {
+        const raw = String(text).trim();
+        if (!raw) return;
+        const phrases = raw
+          .split(/,|;|\band\b|\by\b|\bet\b|和|、/i)
+          .map((p) => p.trim())
+          .filter(Boolean);
+
+        const unmatched = [];
+        phrases.forEach((phrase) => {
+          const spoken = norm(phrase);
+          const hit = optionMatchers.find((o) =>
+            spoken && (spoken === norm(o.label) || spoken.includes(norm(o.label)) || norm(o.label).includes(spoken)));
+          if (hit) hit.setOn();
+          else unmatched.push(phrase);
+        });
+
+        if (unmatched.length) {
+          otherState.on = true;
+          syncOther();
+          const existing = otherInput.value.trim();
+          otherInput.value = existing ? `${existing}, ${unmatched.join(", ")}` : unmatched.join(", ");
+          otherText = otherInput.value;
+        }
+      },
     };
 
     return {
@@ -207,144 +276,156 @@ function buildControl(q, draft) {
     };
   }
 
-  // ---- Severity: colored circular buttons 0-10 ------------------------
+  // ---- Severity: colored circular buttons 1-10 ------------------------
+  // Smooth gradient (light green -> dark red) using the brief's exact hex
+  // values. Speaking a number 1-10 presses that button.
   if (q.type === "severity") {
     let chosen = typeof prior === "number" ? prior : null;
     const container = el("div", { class: "severity-scale" });
+    const byLevel = {};
     for (let n = q.min; n <= q.max; n++) {
+      const color = SEVERITY_COLORS[n - 1] || "#ccc";
       const btn = el("button", {
         class: "severity-dot",
-        dataset: { level: severityLevel(n, q.max) },
-        "aria-label": `Severity ${n}`,
+        style: `background:${color};color:${textOn(color)}`,
+        "aria-label": `${n}`,
         text: String(n),
       });
-      const sync = () => btn.classList.toggle("selected", chosen === n);
-      btn.addEventListener("click", () => { chosen = n; [...container.children].forEach((c) => c.classList.remove("selected")); btn.classList.add("selected"); });
-      sync();
+      const select = () => {
+        chosen = n;
+        [...container.children].forEach((c) => c.classList.remove("selected"));
+        btn.classList.add("selected");
+      };
+      btn.addEventListener("click", select);
+      if (chosen === n) btn.classList.add("selected");
+      byLevel[n] = select;
       container.appendChild(btn);
     }
     const legend = el("div", { class: "severity-legend row-between" }, [
-      el("span", { class: "subtle", text: "None" }),
-      el("span", { class: "subtle", text: "Worst" }),
+      el("span", { class: "subtle", text: `1 - ${t("severity.min")}` }),
+      el("span", { class: "subtle", text: `10 - ${t("severity.max")}` }),
     ]);
     const wrap = el("div", { class: "stack" }, [container, legend]);
     wrap.dataset.inputMethod = "selected";
-    return { control: wrap, getValue: () => chosen };
+
+    // Voice: pull the first 1-10 number out of the spoken text and press it.
+    const spokenTarget = {
+      getBase: () => "",
+      setText: (text) => {
+        const n = parseSpokenNumber(text, q.min, q.max);
+        if (n != null && byLevel[n]) byLevel[n]();
+      },
+    };
+    return { control: wrap, getValue: () => chosen, spokenTarget };
   }
 
-  // ---- Onset: single choice with a detail dropdown for "Longer" -------
+  // ---- Onset: single choice; "Longer" reveals a dropdown --------------
+  // Voice: if the spoken phrase matches an on-screen option, press it. If not,
+  // type the spoken phrase into a free-text box shown below the options.
   if (q.type === "choice-with-detail") {
     let chosen = prior?.choice ?? null;
     let detail = prior?.detail ?? "";
+    let otherText = prior?.other ?? "";
     const container = el("div", { class: "grid-options" });
+    const byValue = {};
 
     const detailSelect = el("select", { class: "input" }, [
-      el("option", { value: "", text: "Choose how long ago" }),
-      ...q.detailOptions.map((o) => el("option", { value: o.value, text: o.label })),
+      el("option", { value: "", text: t("onset.selectOption") }),
+      ...q.detailOptions.map((o) => el("option", { value: o.value, text: t(o.key) })),
     ]);
     detailSelect.value = detail;
     detailSelect.addEventListener("change", () => { detail = detailSelect.value; });
     const detailWrap = el("div", { class: "stack", style: "display:none" }, [detailSelect]);
 
+    // Free-text box for a spoken answer that is not one of the options.
+    const otherInput = el("input", { class: "input", type: "text", placeholder: t("onset.otherPlaceholder"), value: otherText });
+    const otherWrap = el("div", { class: "stack", style: otherText ? "" : "display:none" }, [otherInput]);
+    otherInput.addEventListener("input", () => { otherText = otherInput.value; });
+
     const syncDetail = () => { detailWrap.style.display = chosen === q.detailFor ? "" : "none"; };
 
+    const pick = (value) => {
+      chosen = value;
+      [...container.children].forEach((c) => c.classList.toggle("selected", c.dataset.value === value));
+      if (chosen !== q.detailFor) detail = "";
+      // Picking an option clears the free-text fallback.
+      otherText = ""; otherInput.value = ""; otherWrap.style.display = "none";
+      syncDetail();
+    };
+
     q.options.forEach((opt) => {
-      const btn = el("button", { class: "btn btn-outline choice", text: opt });
-      const sync = () => btn.classList.toggle("selected", chosen === opt);
-      btn.addEventListener("click", () => {
-        chosen = opt;
-        [...container.children].forEach((c) => c.classList.remove("selected"));
-        btn.classList.add("selected");
-        if (chosen !== q.detailFor) detail = "";
-        syncDetail();
-      });
-      sync();
+      const btn = el("button", { class: "btn btn-outline choice", text: t(opt.key), dataset: { value: opt.value } });
+      btn.addEventListener("click", () => pick(opt.value));
+      if (chosen === opt.value) btn.classList.add("selected");
+      byValue[opt.value] = { pick: () => pick(opt.value), label: t(opt.key) };
       container.appendChild(btn);
     });
     syncDetail();
 
-    const wrap = el("div", { class: "stack" }, [container, detailWrap]);
-    wrap.dataset.inputMethod = "selected";
-    return { control: wrap, getValue: () => ({ choice: chosen, detail }) };
-  }
-
-  // ---- Simple single choice (trend) -----------------------------------
-  if (q.type === "choice") {
-    let chosen = prior ?? null;
-    const container = el("div", { class: "grid-options" });
-    q.options.forEach((opt) => {
-      const label = typeof opt === "string" ? opt : opt.label;
-      const value = typeof opt === "string" ? opt : opt.value;
-      const btn = el("button", { class: "btn btn-outline choice", text: label });
-      const sync = () => btn.classList.toggle("selected", chosen === value);
-      btn.addEventListener("click", () => {
-        chosen = value;
-        [...container.children].forEach((c) => c.classList.remove("selected"));
-        btn.classList.add("selected");
-      });
-      sync();
-      container.appendChild(btn);
-    });
-    container.dataset.inputMethod = "selected";
-    return { control: container, getValue: () => chosen };
-  }
-
-  // ---- Warning signs: condensed categories + "None of these" ----------
-  if (q.type === "warning-multi") {
-    const selected = new Set(Array.isArray(prior?.selected) ? prior.selected : []);
-    let noneOn = Boolean(prior?.noneOn);
-    const container = el("div", { class: "grid-options" });
-
-    const describeInput = el("textarea", { class: "input", placeholder: "Describe what you are feeling", text: prior?.describe || "" });
-    const describeWrap = el("div", { class: "stack", style: "display:none" }, [describeInput]);
-
-    const noneBtn = el("button", { class: "btn btn-outline choice", text: "None of these" });
-
-    const syncNone = () => {
-      noneBtn.classList.toggle("selected", noneOn);
-      describeWrap.style.display = noneOn ? "" : "none";
-    };
-
-    q.options.forEach((opt) => {
-      const btn = el("button", { class: "btn btn-outline choice", text: opt.label });
-      const sync = () => btn.classList.toggle("selected", selected.has(opt.id));
-      btn.addEventListener("click", () => {
-        // Choosing a real sign clears "None of these".
-        if (noneOn) { noneOn = false; syncNone(); }
-        selected.has(opt.id) ? selected.delete(opt.id) : selected.add(opt.id);
-        sync();
-      });
-      sync();
-      container.appendChild(btn);
-    });
-
-    noneBtn.addEventListener("click", () => {
-      noneOn = !noneOn;
-      if (noneOn) { selected.clear(); [...container.children].forEach((c) => c.classList.remove("selected")); }
-      syncNone();
-    });
-    container.appendChild(noneBtn);
-    syncNone();
-
-    const wrap = el("div", { class: "stack" }, [container, describeWrap]);
+    const wrap = el("div", { class: "stack" }, [container, detailWrap, otherWrap]);
     wrap.dataset.inputMethod = "selected";
 
     const spokenTarget = {
-      getBase: () => describeInput.value,
-      setText: (text) => { noneOn = true; syncNone(); describeInput.value = text; },
+      getBase: () => "",
+      setText: (text) => {
+        const spoken = norm(text);
+        // Try to match a visible option by its localized label.
+        const hit = Object.values(byValue).find((o) => spoken && (spoken === norm(o.label) || spoken.includes(norm(o.label)) || norm(o.label).includes(spoken)));
+        if (hit) { hit.pick(); return; }
+        // Not an option on the page -> type it into the free-text box.
+        chosen = null;
+        [...container.children].forEach((c) => c.classList.remove("selected"));
+        otherText = String(text).trim();
+        otherInput.value = otherText;
+        otherWrap.style.display = "";
+        detailWrap.style.display = "none";
+      },
     };
 
     return {
       control: wrap,
-      getValue: () => ({ selected: [...selected], noneOn, describe: noneOn ? describeInput.value.trim() : "" }),
+      getValue: () => ({ choice: chosen, detail, other: chosen ? "" : otherText.trim() }),
       spokenTarget,
     };
+  }
+
+  // ---- Simple single choice (trend) -----------------------------------
+  // Voice: speaking an option label presses that button automatically.
+  if (q.type === "choice") {
+    let chosen = prior ?? null;
+    const container = el("div", { class: "grid-options" });
+    const byLabel = [];
+    q.options.forEach((opt) => {
+      const label = typeof opt === "string" ? opt : t(opt.key);
+      const value = typeof opt === "string" ? opt : opt.value;
+      const btn = el("button", { class: "btn btn-outline choice", text: label });
+      const select = () => {
+        chosen = value;
+        [...container.children].forEach((c) => c.classList.remove("selected"));
+        btn.classList.add("selected");
+      };
+      btn.addEventListener("click", select);
+      if (chosen === value) btn.classList.add("selected");
+      byLabel.push({ label, select });
+      container.appendChild(btn);
+    });
+    container.dataset.inputMethod = "selected";
+
+    const spokenTarget = {
+      getBase: () => "",
+      setText: (text) => {
+        const spoken = norm(text);
+        const hit = byLabel.find((o) => spoken && (spoken === norm(o.label) || spoken.includes(norm(o.label)) || norm(o.label).includes(spoken)));
+        if (hit) hit.select();
+      },
+    };
+    return { control: container, getValue: () => chosen, spokenTarget };
   }
 
   // ---- Free text (description) ----------------------------------------
   let confidence = null;
   const textarea = el("textarea", {
-    class: "input", placeholder: "Type here...", text: prior || "",
+    class: "input", placeholder: t("description.placeholder"), text: prior || "",
     oninput: () => { textarea.closest(".stack").dataset.inputMethod = "typed"; },
   });
   const wrap = el("div", { class: "stack" }, [textarea]);
@@ -367,6 +448,42 @@ function buildControl(q, draft) {
   };
 }
 
+/** Pull the first integer in [min,max] out of a spoken phrase (digits or words). */
+function parseSpokenNumber(text, min, max) {
+  const s = norm(text);
+  // Digit form first ("7", "pain is 7").
+  const digit = s.match(/\d{1,2}/);
+  if (digit) {
+    const n = parseInt(digit[0], 10);
+    if (n >= min && n <= max) return n;
+  }
+  // Word form (English + the other three supported languages, 1-10).
+  const words = {
+    en: ["one","two","three","four","five","six","seven","eight","nine","ten"],
+    es: ["uno","dos","tres","cuatro","cinco","seis","siete","ocho","nueve","diez"],
+    fr: ["un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix"],
+    zh: ["一","二","三","四","五","六","七","八","九","十"],
+  };
+  for (const list of Object.values(words)) {
+    for (let i = 0; i < list.length; i++) {
+      const n = i + 1;
+      if (n >= min && n <= max && (s.includes(list[i]) || text.includes(list[i]))) return n;
+    }
+  }
+  return null;
+}
+
+/** Pick black or white text for legibility on a given hex background. */
+function textOn(hex) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  // Perceived luminance (sRGB). Light backgrounds -> dark text.
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.6 ? "#1a1a1a" : "#ffffff";
+}
+
 // =========================================================================
 // Validation + serialization + signal derivation
 // =========================================================================
@@ -375,26 +492,24 @@ function buildControl(q, draft) {
 function validate(q, value) {
   switch (q.type) {
     case "name":
-      if (!value.firstName || !value.lastName) return "Please enter your first and last name.";
+      if (!value.firstName || !value.lastName) return t("name.error");
       return "";
     case "multi-choice":
-      if (!value.selected.length && !(value.otherOn && value.other)) return "Please select at least one, or describe it under \"Other\".";
+      if (!value.selected.length && !(value.otherOn && value.other)) return t("symptom.error");
       return "";
     case "severity":
-      if (value == null) return "Please choose a number.";
+      if (value == null) return t("severity.error");
       return "";
     case "choice-with-detail":
-      if (!value.choice) return "Please answer to continue.";
-      if (value.choice === q.detailFor && !value.detail) return "Please choose how long ago.";
+      // Valid if a button is chosen, or a free-text answer was given.
+      if (!value.choice && !value.other) return t("onset.error");
+      if (value.choice === q.detailFor && !value.detail) return t("onset.detailError");
       return "";
     case "choice":
-      if (!value) return "Please answer to continue.";
-      return "";
-    case "warning-multi":
-      if (!value.selected.length && !value.noneOn) return "Select any that apply, or choose \"None of these\".";
+      if (!value) return t("trend.error");
       return "";
     case "text":
-      if (!value) return "Please answer to continue.";
+      if (!value) return t("description.error");
       return "";
     default:
       return "";
@@ -414,13 +529,8 @@ function serializeAnswer(q, value) {
     case "severity":
       return String(value);
     case "choice-with-detail":
+      if (!value.choice && value.other) return value.other;
       return value.choice === q.detailFor && value.detail ? `${value.choice} (${value.detail})` : value.choice;
-    case "warning-multi": {
-      if (value.noneOn) return value.describe ? `None of the listed signs. ${value.describe}` : "None of the listed signs.";
-      return value.selected
-        .map((id) => q.options.find((o) => o.id === id)?.label || id)
-        .join(", ");
-    }
     default:
       return typeof value === "string" ? value : JSON.stringify(value);
   }
@@ -430,29 +540,11 @@ function serializeAnswer(q, value) {
 function deriveSignals(answers) {
   const severity = typeof answers["severity"]?.answer === "number" ? answers["severity"].answer : 0;
   const trend = answers["trend"]?.answer || "stable";
-
-  // Expand condensed warning-sign categories back into the critical sign ids
-  // the queue rules recognize (see data/questions.js `maps`).
-  const warn = answers["warning-signs"]?.answer;
-  const warningSigns = [];
-  if (warn && !warn.noneOn && Array.isArray(warn.selected)) {
-    warn.selected.forEach((catId) => {
-      const cat = WARNING_SIGNS.find((w) => w.id === catId);
-      if (cat) warningSigns.push(...cat.maps);
-    });
-  }
-
-  return { severity, trend, warningSigns, immediateHelp: false };
+  // The warning-signs question was removed from the patient form, so no
+  // critical signs are collected here; the queue rules handle an empty list.
+  return { severity, trend, warningSigns: [], immediateHelp: false };
 }
 
-/** Severity color band for a value on a 0..max scale. */
-function severityLevel(n, max) {
-  const ratio = n / max;
-  if (ratio <= 0.3) return "safe";      // green
-  if (ratio <= 0.6) return "moderate";  // yellow/orange
-  return "danger";                      // red
-}
-
-/** Expose the collected draft (kept for compatibility; confirm screen removed). */
+/** Expose the collected draft (kept for compatibility). */
 export function getDraft(sessionId) { return drafts[sessionId]; }
 export function clearDraft(sessionId) { delete drafts[sessionId]; }

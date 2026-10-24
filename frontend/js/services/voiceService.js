@@ -276,10 +276,10 @@ export const voiceService = {
    * @param {Function} [opts.onStatus]        (message) => void status updates.
    * @returns {{ button: HTMLElement }}  the mic button element to mount.
    */
-  createMicWidget({ language = "en", onText, getBaseText, onStatus } = {}) {
+  createMicWidget({ language = "en", onText, getBaseText, onStatus, silenceMs = 1500, compact = false } = {}) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "mic-btn";
+    button.className = compact ? "mic-btn mic-btn-sm" : "mic-btn";
     button.setAttribute("aria-label", "Speak your answer");
     button.innerHTML = micIconSvg();
 
@@ -295,6 +295,18 @@ export const voiceService = {
     let live = null;          // on-device interim recognizer (live feedback)
     let listening = false;
     let liveText = "";        // latest interim text from the on-device recognizer
+    let silenceTimer = null;  // fires stop() after a pause in speech
+
+    // Auto-stop after `silenceMs` of no new speech. Restarted on every interim
+    // result; cleared whenever listening ends.
+    const clearSilenceTimer = () => {
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+    };
+    const armSilenceTimer = () => {
+      clearSilenceTimer();
+      if (!silenceMs) return;
+      silenceTimer = setTimeout(() => { if (listening) stop(); }, silenceMs);
+    };
 
     const setListening = (on) => {
       listening = on;
@@ -308,7 +320,11 @@ export const voiceService = {
       // Live on-screen transcription (interim words) via the on-device engine.
       live = startLiveWebSpeech({
         lang: speechLocale(language),
-        onInterim: (text) => { liveText = text; onText && onText(prefix + text); },
+        onInterim: (text) => {
+          liveText = text;
+          onText && onText(prefix + text);
+          armSilenceTimer(); // reset the pause countdown on every new word
+        },
       });
 
       // In parallel, record audio so we can get the ACCURATE transcript on stop.
@@ -318,10 +334,12 @@ export const voiceService = {
       }
 
       setListening(true);
-      onStatus && onStatus("Listening... tap the mic again to stop.");
+      armSilenceTimer(); // start the pause countdown immediately
+      onStatus && onStatus("Listening... take your time, then tap the mic to stop.");
     }
 
     async function stop() {
+      clearSilenceTimer();
       setListening(false);
       if (live) { live.stop(); live = null; }
       const prefix = base() ? base() + " " : "";

@@ -35,6 +35,10 @@ export const config = {
     // Amazon Bedrock (AI summaries/explanations). Disabled => raw answers.
     bedrockEnabled: env("BEDROCK_ENABLED", "false") === "true",
     bedrockModelId: env("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
+
+    // Amazon Translate (render the patient's own words in English for staff).
+    // Disabled => fall back to the small offline phrase/word dictionary.
+    translateEnabled: env("TRANSLATE_ENABLED", "false") === "true",
   },
 
   server: {

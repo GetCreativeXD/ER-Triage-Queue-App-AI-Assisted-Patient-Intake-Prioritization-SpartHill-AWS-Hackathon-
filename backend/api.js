@@ -39,6 +39,8 @@ export const api = {
   overridePriority(id, priority, note) { return triageService.overridePriority(id, priority, note); },
   // POST /api/queue/:sessionId/status
   setStatus(id, status) { return triageService.setStatus(id, status); },
+  // DELETE /api/queue/:sessionId
+  deletePatient(id) { return triageService.deletePatient(id); },
 
   // ---- Notifications ---------------------------------------------------
   // GET /api/notifications
