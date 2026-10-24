@@ -1,0 +1,20 @@
+{
+  "name": "er-triage-queue-app",
+  "version": "1.0.0",
+  "description": "ER Triage Queue App with live Amazon Bedrock and Amazon Lex integration",
+  "type": "module",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "3.1156.0",
+    "@aws-sdk/client-lex-runtime-v2": "3.1156.0",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.22.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

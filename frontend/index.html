@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ER Triage Queue</title>
+
+  <!-- Hospital-inspired design system -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!--
+    The whole app is a single page. Each "screen" is rendered by a module in
+    js/screens/ into the #app container below. app.js acts as the router and
+    decides which screen to show based on the URL hash (e.g. #/welcome).
+  -->
+
+  <!-- Prototype disclaimer: required by the concept's safety section. -->
+  <div id="disclaimer-bar" class="disclaimer-bar">
+    Prototype only &mdash; this is a triage-support demo, not a medical diagnosis tool.
+    For severe or worsening symptoms, notify ER staff immediately.
+  </div>
+
+  <!-- Screens are injected here by the active screen module. -->
+  <main id="app" class="app-root" aria-live="polite"></main>
+
+  <!-- Shared modal host (help / emergency instructions). -->
+  <div id="modal-host"></div>
+
+  <!--
+    Scripts are plain ES modules so the browser loads them with no build step.
+    app.js imports everything else it needs, so we only load the entry point.
+  -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
