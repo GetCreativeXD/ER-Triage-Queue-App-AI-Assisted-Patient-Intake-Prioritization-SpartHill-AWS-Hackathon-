@@ -67,10 +67,17 @@ export const now = () => new Date().toISOString();
  * @typedef {Object} PatientSession
  * Mirrors "Patient session" in the concept data model.
  */
-export function createSession({ sessionCode, preferredLanguage = "en" }) {
+export function createSession({ sessionCode, preferredLanguage = "en", patientNumber = null, firstName = "", lastName = "" }) {
   return {
     id: genId("ses"),
     sessionCode,
+    // 4-digit patient number shown to the patient and the triage staff.
+    // Allocated sequentially by the store (unique, resets after 10,000).
+    patientNumber,
+    // Patient-entered name (first question after language selection). The
+    // triage app shows this alongside the patient number.
+    firstName,
+    lastName,
     preferredLanguage,
     status: STATUS.WAITING,
     createdAt: now(),

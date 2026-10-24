@@ -4,47 +4,68 @@
 // A tiny string table keyed by language code. Only the handful of strings
 // needed for the demo are translated; `t()` falls back to English for any
 // missing key/language. A production app would load fuller locale files.
+//
+// The chosen language is persisted to localStorage so it stays fixed across
+// every question and the success screen (the brief requires the language not
+// to revert to English after the patient-number prompt).
 // =========================================================================
 
 const STRINGS = {
   en: {
     welcomeTitle: "ER Triage Queue",
-    welcomeIntro: "Tell us your language, then answer a few short questions so the nurse can see who needs help first.",
-    languagePrompt: "Choose your language by typing it or tapping the mic to say it.",
-    languagePlaceholder: "Type your language (e.g. English)",
-    orSpeak: "Or press the mic and say your language",
+    welcomeIntro: "Choose your language to begin. A nurse will see your answers to decide who needs help first.",
+    languagePrompt: "Choose your language",
     continue: "Continue",
-    sessionTitle: "Enter your session code",
-    sessionHelp: "Use the code from the registration desk or your wristband.",
-    start: "Start",
+    doneTitle: "You're all set",
+    doneSubtitle: "Your patient number is",
+    doneHelp: "Please keep this number. A nurse can now see your information.",
   },
   es: {
     welcomeTitle: "Cola de Triaje de Urgencias",
-    welcomeIntro: "Indíquenos su idioma y responda unas preguntas breves para que la enfermera vea quién necesita ayuda primero.",
-    languagePrompt: "Elija su idioma escribiéndolo o tocando el micrófono para decirlo.",
-    languagePlaceholder: "Escriba su idioma (p. ej. Español)",
-    orSpeak: "O presione el micrófono y diga su idioma",
+    welcomeIntro: "Elija su idioma para comenzar. Una enfermera verá sus respuestas para decidir quién necesita ayuda primero.",
+    languagePrompt: "Elija su idioma",
     continue: "Continuar",
-    sessionTitle: "Ingrese su código de sesión",
-    sessionHelp: "Use el código del mostrador de registro o de su pulsera.",
-    start: "Comenzar",
+    doneTitle: "Todo listo",
+    doneSubtitle: "Su número de paciente es",
+    doneHelp: "Conserve este número. Una enfermera ya puede ver su información.",
   },
   fr: {
     welcomeTitle: "File de Triage des Urgences",
-    welcomeIntro: "Indiquez votre langue, puis répondez à quelques questions pour que l'infirmière voie qui aider en premier.",
-    languagePrompt: "Choisissez votre langue en la tapant ou en appuyant sur le micro pour la dire.",
-    languagePlaceholder: "Tapez votre langue (p. ex. Français)",
-    orSpeak: "Ou appuyez sur le micro et dites votre langue",
+    welcomeIntro: "Choisissez votre langue pour commencer. Une infirmière verra vos réponses pour décider qui aider en premier.",
+    languagePrompt: "Choisissez votre langue",
     continue: "Continuer",
-    sessionTitle: "Entrez votre code de session",
-    sessionHelp: "Utilisez le code du bureau d'enregistrement ou de votre bracelet.",
-    start: "Commencer",
+    doneTitle: "Tout est prêt",
+    doneSubtitle: "Votre numéro de patient est",
+    doneHelp: "Conservez ce numéro. Une infirmière peut maintenant voir vos informations.",
+  },
+  zh: {
+    welcomeTitle: "急诊分诊队列",
+    welcomeIntro: "请选择您的语言开始。护士将查看您的回答以决定优先顺序。",
+    languagePrompt: "选择您的语言",
+    continue: "继续",
+    doneTitle: "已完成",
+    doneSubtitle: "您的患者编号是",
+    doneHelp: "请保留此编号。护士现在可以查看您的信息。",
   },
 };
 
-/** Current UI language; defaults to English. */
+const STORAGE_KEY = "er-triage-language";
+
+/** Current UI language; restored from storage, defaults to English. */
 let current = "en";
-export function setLanguage(code) { if (STRINGS[code]) current = code; }
+try {
+  if (typeof localStorage !== "undefined") {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && STRINGS[saved]) current = saved;
+  }
+} catch { /* ignore */ }
+
+export function setLanguage(code) {
+  if (STRINGS[code]) {
+    current = code;
+    try { if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, code); } catch { /* ignore */ }
+  }
+}
 export function getLanguage() { return current; }
 
 /** Translate a key for the current language, falling back to English. */

@@ -1,8 +1,14 @@
 # ER Triage Queue App
 
-A patient-intake and triage-support prototype for an emergency room. Patients
-check in by typing or speaking, and triage nurses get a live, scanable priority
-queue with transparent, nurse-overridable recommendations.
+A patient-intake and triage-support prototype for an emergency room. It has two
+clients that share one Express/AWS backend:
+
+- **Patient website** (`frontend/`) — a patient scans a QR code and fills out
+  the intake form on their own phone. On submit they get a **4-digit patient
+  number**.
+- **Triage app** (`triage-app/`) — a **native (Capacitor) app** for staff that
+  displays the check-in QR code and a live priority queue showing each patient's
+  number and name. See `triage-app/README.md` for building it.
 
 > **Prototype disclaimer:** This is a hackathon demo and a triage *support*
 > tool, not a medical diagnosis system. It does not replace professional
@@ -10,34 +16,45 @@ queue with transparent, nurse-overridable recommendations.
 
 > **AWS integration:** This build runs on a real Node/Express server and calls
 > **Amazon Bedrock** (Claude) to summarize patient descriptions on the intake
-> path. **Amazon Lex** voice intake is wired and ready but off by default
-> (no bot configured); voice falls back to the browser's Web Speech API until a
-> bot is provisioned. If Bedrock is unavailable the app falls back to the raw
-> patient answers, so it always keeps working.
+> path. Voice intake uses **Amazon Transcribe** for accurate, verbatim
+> speech-to-text (optionally **Amazon Transcribe Medical** for clinical
+> vocabulary); it is wired and ready but off by default. When it is off, voice
+> falls back to the browser's on-device Web Speech API. If Bedrock or Transcribe
+> is unavailable the app falls back to the raw patient answers / typed input, so
+> it always keeps working.
 
 ---
 
 ## Features
 
-**Patient**
-- Welcome screen with a language **text box** and a **microphone button** to
-  choose a language by typing or speaking.
-- Session-code check-in (no account creation).
-- One-question-at-a-time intake with buttons, a severity slider, warning-sign
-  multi-select, and free text / voice.
-- Answer review + edit before submitting.
+**Patient website**
+- Language **dropdown** (English, Spanish, French, Chinese). The chosen language
+  stays fixed through every question and the success screen.
+- No session-code step — the patient arrives by scanning the triage app's QR.
+- First question asks for **first + last name** (shown to triage).
+- One question per step: name, main reason (**select all that apply**, with an
+  **Other** free-text option), severity as **colored circular buttons**
+  (green → yellow/orange → red), onset (with a dropdown of longer ranges),
+  trend, condensed warning-sign categories (with **None of these** → describe),
+  and a free-text description.
+- A **red microphone** (white icon) sits below every question; it **pulses**
+  while listening and transcribes **live** as the patient speaks, with the
+  accurate Amazon Transcribe result applied on stop.
+- On submit: a big **white check mark in a green circle** with the patient's
+  **4-digit patient number** below it.
 - Status page with a prominent "condition changed" flow (worse / better /
   changed / **need help now**) and an immediate-help safety modal.
 
-**Nurse**
-- Live priority queue (auto-refreshing) with position, priority, trend, wait
-  time, and last-update time.
-- "Changed" / review flags for patients whose condition updated.
-- Detail panel with intake summary, update timeline, and the **reason** for
-  each recommendation.
-- Confirm or **override** the system recommendation; set patient status
-  (call / being seen / recheck / completed / unavailable).
-- Notifications strip with distinct high-severity alerts and acknowledgement.
+**Triage app (native)**
+- **Check-in QR** tab: shows a QR code the patient scans to open the website.
+- **Queue** tab: live priority queue with **patient number + name**, color-coded
+  by priority; tap a patient for the AI summary and intake.
+- One-tap **Accept** priority and a **Sort patients** control (replaces the old
+  multi-step override); short, specific status verbs (Call now / Start care /
+  Recheck / Finish / Away).
+
+**Patient numbers:** issued sequentially as 4 digits, never repeating a number
+in active use, resetting after 10,000.
 
 ---
 
@@ -57,19 +74,24 @@ queue with transparent, nurse-overridable recommendations.
 │       ├── services/
 │       │   ├── dom.js        # Tiny DOM helpers (el, mount, navigate, modal)
 │       │   ├── i18n.js       # Demo translations
-│       │   └── voiceService.js # Web Speech API wrapper (Lex-swappable)
+│       │   ├── voiceService.js # Mic recorder → Transcribe, + Web Speech fallback
+│       │   └── apiClient.js  # Fetch client the screens use (HTTP → server)
 │       └── screens/
-│           ├── welcome.js    # Language text box + mic button
-│           ├── sessionCode.js
-│           ├── intake.js
-│           ├── confirm.js
+│           ├── welcome.js    # Language dropdown → start
+│           ├── intake.js     # One-question-per-step intake (+ mic on each)
+│           ├── done.js       # Success: green check + patient number
 │           ├── status.js     # Status + condition updates
-│           └── nurse.js      # Dashboard, detail, notifications
+│           └── nurse.js      # Web staff dashboard (also usable in a browser)
+│
+├── triage-app/               # Native (Capacitor) triage app — see its README
+│   ├── capacitor.config.json
+│   ├── package.json
+│   └── www/                  # Web UI bundled into the native app (QR + queue)
 │
 ├── backend/                  # Node/Express server + AWS integrations
 │   ├── server.js             # Express server: REST endpoints + static hosting
 │   ├── api.js                # Facade delegating to triageService
-│   ├── config.js             # Env-driven feature flags (Lex, Bedrock, port)
+│   ├── config.js             # Env-driven feature flags (Transcribe, Bedrock, port)
 │   ├── data/
 │   │   └── seed.js           # Demo patients (run through real rules)
 │   └── services/
@@ -77,11 +99,8 @@ queue with transparent, nurse-overridable recommendations.
 │       ├── store.js          # In-memory persistence
 │       ├── queueRules.js     # Deterministic priority rules (edit here)
 │       ├── triageService.js  # Orchestration (intake, updates, queue, audit)
-│       ├── lexService.js     # Amazon Lex (live RecognizeText + demo fallback)
+│       ├── transcribeService.js # Amazon Transcribe (streaming STT + demo fallback)
 │       └── bedrockService.js # Amazon Bedrock (live InvokeModel + fallback)
-│
-├── frontend/js/services/
-│   └── apiClient.js          # Fetch client the screens use (HTTP → server)
 │
 ├── shared/
 │   └── schemas.js            # Record shapes shared by frontend + backend
@@ -117,9 +136,17 @@ AWS is off or a call fails.
 - **Persistence** — `store.js` keeps data in memory and mirrors it to
   `localStorage`, so a refresh preserves demo state. The interface matches what
   a DynamoDB-backed store would expose.
-- **Amazon Lex** — `lexService.js` wraps the voice conversation. With no
-  credentials it reports demo mode and the UI falls back to the browser's Web
-  Speech API (`voiceService.js`) and typed input.
+- **Amazon Transcribe** — the patient records a short clip on the description
+  question; `voiceService.js` encodes it as 16 kHz mono 16-bit PCM and uploads
+  it to `POST /api/voice/transcribe`, where `transcribeService.js` streams it to
+  Amazon Transcribe (or **Transcribe Medical**) and returns a verbatim
+  transcript plus a confidence score. That transcript is what the patient
+  reviews, what the nurse sees, and what Bedrock summarizes — so the pipeline is
+  *speech → accurate text → nuanced summary*. With Transcribe off (or on any
+  failure) the UI falls back to the browser's on-device Web Speech API and typed
+  input. Transcribe replaces the earlier Amazon Lex integration, which was an
+  intent/slot chatbot engine and discarded the free-form nuance this use case
+  needs.
 
 ---
 
@@ -147,8 +174,8 @@ Then open **http://localhost:3001/**.
 - Nurse experience: open **http://localhost:3001/#/nurse** in a second tab.
 
 The server reads credentials from the environment via the AWS SDK's default
-provider chain — nothing is hard-coded. On boot it logs whether Bedrock and Lex
-are LIVE or in demo mode. Demo data is seeded automatically; use **Reset demo**
+provider chain — nothing is hard-coded. On boot it logs whether Bedrock and
+Transcribe are LIVE or in demo mode. Demo data is seeded automatically; use **Reset demo**
 on the nurse dashboard to reload a fresh set of patients.
 
 ### Verifying Bedrock is actually used
@@ -166,15 +193,18 @@ i.e. Amazon Bedrock genuinely produced it. You can also watch the server console
 during a normal run: a successful summary logs no `[bedrock] ... failed` line.
 
 ### Demo script
-1. Open the nurse dashboard in one tab — four seeded patients appear, sorted by
-   priority.
-2. In another tab, pick a language (type or mic), enter a session code, and
-   complete intake.
-3. The new patient appears in the queue with a notification.
+1. Open the staff/triage view (the native app, or `#/nurse` in a browser) —
+   four seeded patients appear, sorted by priority. The triage app's **Check-in
+   QR** tab shows the code a patient scans.
+2. On a phone, open the patient website (scan the QR, or browse to the server
+   root), pick a language, enter a name, and complete intake.
+3. On submit, the patient sees a green check with their **4-digit patient
+   number**; the patient appears in the queue with that number + name and a
+   notification.
 4. On the patient status page, tap **Report a change → I feel worse**, raise the
    severity, and send. The queue reorders and a high-severity alert appears.
-5. Open the patient in the nurse detail panel, read the reason, then **Confirm**
-   or **Override** the priority and set a status.
+5. Open the patient in the triage detail view, read the reason, then **Accept**
+   the priority or use **Sort patients** to change it, and set a status.
 
 ---
 
@@ -189,11 +219,13 @@ Non-secret config lives in `.env` (gitignored). **Credentials never go in
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | Server port (default `3001`). |
-| `AWS_REGION` | AWS region for Lex/Bedrock (default `us-east-1`). |
+| `AWS_REGION` | AWS region for Transcribe/Bedrock (default `us-east-1`). |
 | `BEDROCK_ENABLED` | `true` to use Amazon Bedrock summaries/explanations. |
 | `BEDROCK_MODEL_ID` | Bedrock model/inference-profile id (see note below). |
-| `LEX_ENABLED` | `true` to use live Amazon Lex voice intake. |
-| `LEX_BOT_ID`, `LEX_BOT_ALIAS_ID`, `LEX_LOCALE_ID` | Lex bot identifiers + locale. |
+| `TRANSCRIBE_ENABLED` | `true` to transcribe recorded intake audio server-side. |
+| `TRANSCRIBE_MEDICAL` | `true` to use Amazon Transcribe Medical (clinical vocab, en-US only). |
+| `TRANSCRIBE_MEDICAL_SPECIALTY` | Medical specialty when medical mode is on (default `PRIMARYCARE`). |
+| `TRANSCRIBE_SAMPLE_RATE` | Audio sample rate in Hz (default `16000`; keep in sync with the frontend). |
 | `WAIT_THRESHOLD_MINUTES` | Minutes before a long wait alerts the nurse. |
 
 ### Bedrock model access
@@ -221,10 +253,8 @@ used a bare model id — switch to the `us.`-prefixed inference profile.
 Minimum for the live path:
 
 - **Bedrock:** `bedrock:InvokeModel` on the chosen model / inference profile ARN.
-- **Lex (when enabled):** `lex:RecognizeText` scoped to the specific bot alias.
-
-The AWS design should be reviewed for hospital privacy, security, retention, and
-compliance requirements before any real patient data is used.
+- **Transcribe (when enabled):** `transcribe:StartStreamTranscription`, plus
+  `transcribe:StartMedicalStreamTranscription` when `TRANSCRIBE_MEDICAL=true`.
 
 The AWS design should be reviewed for hospital privacy, security, retention, and
 compliance requirements before any real patient data is used.
@@ -233,18 +263,23 @@ compliance requirements before any real patient data is used.
 
 ## Testing (manual)
 
-1. **Intake (typed):** complete the flow with keyboard only; confirm the patient
-   reaches the status page and appears in the queue.
-2. **Intake (voice):** on a browser with speech support, use the mic on the
-   description question; confirm the transcript appears for review.
-3. **Queue ordering:** seed patients should sort with "Immediate review" at the
-   top and "Low urgency" at the bottom; waiting time breaks ties.
-4. **Condition update → escalation:** report worsening + high severity and
+1. **Intake (typed):** pick a language, enter a name, and complete every
+   question with the keyboard; confirm the success screen shows a 4-digit
+   patient number and the patient appears in the queue with number + name.
+2. **Intake (voice):** on any question, tap the red mic — it pulses and shows
+   live text as you speak; tap again to stop. With `TRANSCRIBE_ENABLED=true` the
+   recorded clip is sent to Amazon Transcribe and the accurate transcript
+   replaces the live text; otherwise the on-device text is kept.
+3. **Language persistence:** change the language on the welcome screen and
+   confirm it stays the same through every question and the success screen.
+4. **Queue ordering:** seed patients sort with "Immediate review" at the top and
+   "Low urgency" at the bottom; waiting time breaks ties.
+5. **Condition update → escalation:** report worsening + high severity and
    confirm the priority rises and a high-severity notification appears.
-5. **Nurse override:** override a recommendation and confirm the queue and audit
-   reflect the change.
-6. **Responsive:** verify the nurse layout collapses to one column on a
-   tablet-width viewport.
+6. **Sort patients:** in the triage view, use **Sort patients** to set a
+   priority and confirm the queue re-sorts and the audit reflects the change.
+7. **Patient numbers:** create several patients and confirm numbers are 4
+   digits, sequential, and never repeat an active one.
 
 ---
 
@@ -255,9 +290,11 @@ compliance requirements before any real patient data is used.
   there is no real database or multi-device durability.
 - **Amazon Bedrock is live** on the intake summary path (requires model access
   + credentials); it falls back to raw text if unavailable.
-- **Amazon Lex is wired but off by default** — no bot is provisioned, so voice
-  uses the browser's Web Speech API. Create a Lex v2 bot, then set
-  `LEX_ENABLED=true` + the bot/alias ids to make it live.
+- **Amazon Transcribe is wired but off by default** — set `TRANSCRIBE_ENABLED=true`
+  (and optionally `TRANSCRIBE_MEDICAL=true`) with the IAM permissions above to
+  make server-side speech-to-text live. Until then, voice uses the browser's
+  on-device Web Speech API. Transcribe Medical is English (en-US) only; other
+  languages use standard Transcribe.
 - Translations cover only a small demo set of strings.
 - No authentication; the nurse view is open for demo convenience.
 ```

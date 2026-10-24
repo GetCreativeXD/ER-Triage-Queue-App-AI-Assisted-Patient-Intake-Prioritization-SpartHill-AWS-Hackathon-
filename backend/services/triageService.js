@@ -20,14 +20,36 @@ import { bedrockService } from "./bedrockService.js";
 
 export const triageService = {
   // ---- Sessions --------------------------------------------------------
-  createSession(sessionCode, preferredLanguage) {
-    const session = createSession({ sessionCode, preferredLanguage });
+  /**
+   * Create a patient session. A unique 4-digit patient number is allocated
+   * here (the value shown to the patient on the success screen and to triage
+   * staff in the queue). `firstName` / `lastName` are optional at creation and
+   * are usually set on the first intake step via setSessionName().
+   *
+   * @param {string} sessionCode       Internal code (also used for demo seeds).
+   * @param {string} preferredLanguage Language chosen on the welcome screen.
+   * @param {Object} [opts]            { firstName, lastName }.
+   */
+  createSession(sessionCode, preferredLanguage, { firstName = "", lastName = "" } = {}) {
+    const patientNumber = store.nextPatientNumber();
+    const session = createSession({ sessionCode, preferredLanguage, patientNumber, firstName, lastName });
     store.addSession(session);
     store.addAudit(createAuditRecord({
       actor: "system", action: "session-created", sessionRef: session.id,
-      newValue: sessionCode,
+      newValue: patientNumber,
     }));
     return session;
+  },
+
+  /** Record the patient's name (first question after language selection). */
+  setSessionName(sessionId, firstName = "", lastName = "") {
+    const session = store.getSession(sessionId);
+    if (!session) throw new Error("Session not found");
+    store.updateSession(sessionId, {
+      firstName: String(firstName).trim(),
+      lastName: String(lastName).trim(),
+    });
+    return store.getSession(sessionId);
   },
 
   getSession(id) { return store.getSession(id); },
@@ -147,6 +169,9 @@ export const triageService = {
     const entries = active.map((s) => ({
       sessionId: s.id,
       sessionCode: s.sessionCode,
+      patientNumber: s.patientNumber,
+      firstName: s.firstName || "",
+      lastName: s.lastName || "",
       priority: s.currentPriority || PRIORITY.STANDARD,
       priorityReason: s.priorityReason,
       recommendedPriority: s.recommendedPriority,

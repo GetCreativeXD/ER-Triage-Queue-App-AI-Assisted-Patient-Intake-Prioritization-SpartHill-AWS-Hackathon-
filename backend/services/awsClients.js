@@ -11,11 +11,11 @@
 // =========================================================================
 
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
-import { LexRuntimeV2Client } from "@aws-sdk/client-lex-runtime-v2";
+import { TranscribeStreamingClient } from "@aws-sdk/client-transcribe-streaming";
 import { config } from "../config.js";
 
 let _bedrock = null;
-let _lex = null;
+let _transcribe = null;
 
 /** Memoized Bedrock Runtime client. */
 export function getBedrockClient() {
@@ -25,10 +25,10 @@ export function getBedrockClient() {
   return _bedrock;
 }
 
-/** Memoized Lex Runtime v2 client. */
-export function getLexClient() {
-  if (!_lex) {
-    _lex = new LexRuntimeV2Client({ region: config.aws.region });
+/** Memoized Amazon Transcribe streaming client (speech-to-text). */
+export function getTranscribeClient() {
+  if (!_transcribe) {
+    _transcribe = new TranscribeStreamingClient({ region: config.aws.region });
   }
-  return _lex;
+  return _transcribe;
 }

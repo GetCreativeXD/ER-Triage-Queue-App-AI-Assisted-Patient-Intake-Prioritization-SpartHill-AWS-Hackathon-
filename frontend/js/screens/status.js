@@ -12,7 +12,7 @@ import { el, mount, navigate } from "../services/dom.js";
 import { api } from "../services/apiClient.js";
 import { priorityBadge, openEmergencyModal } from "../components.js";
 import { WARNING_SIGNS } from "../data/questions.js";
-import { voiceService, speechLocale } from "../services/voiceService.js";
+import { voiceService } from "../services/voiceService.js";
 import { getLanguage } from "../services/i18n.js";
 
 export async function renderStatus(sessionId) {
@@ -59,48 +59,57 @@ export async function renderStatus(sessionId) {
 
   /** Short follow-up: severity + optional note, then submit the update. */
   function showFollowUp(trend) {
-    const severityOut = el("strong", { text: "5" });
-    const slider = el("input", {
-      class: "slider", type: "range", min: "0", max: "10", value: "5",
-      "aria-label": "How severe is it now?",
-      oninput: () => (severityOut.textContent = slider.value),
-    });
+    // Severity as colored circular buttons (green -> yellow/orange -> red).
+    let severity = 5;
+    const scale = el("div", { class: "severity-scale" });
+    for (let n = 0; n <= 10; n++) {
+      const ratio = n / 10;
+      const level = ratio <= 0.3 ? "safe" : ratio <= 0.6 ? "moderate" : "danger";
+      const dot = el("button", { class: "severity-dot", dataset: { level }, "aria-label": `Severity ${n}`, text: String(n) });
+      if (n === severity) dot.classList.add("selected");
+      dot.addEventListener("click", () => {
+        severity = n;
+        [...scale.children].forEach((c) => c.classList.remove("selected"));
+        dot.classList.add("selected");
+      });
+      scale.appendChild(dot);
+    }
 
-    // Let the patient flag warning signs on an update too.
+    // Let the patient flag condensed warning-sign categories on an update too.
     const signSet = new Set();
     const signButtons = WARNING_SIGNS.map((w) => {
-      const b = el("button", { class: "btn btn-outline", text: w.label });
+      const b = el("button", { class: "btn btn-outline choice", text: w.label });
       b.addEventListener("click", () => {
         signSet.has(w.id) ? signSet.delete(w.id) : signSet.add(w.id);
-        b.style.borderColor = signSet.has(w.id) ? "var(--p-immediate)" : "";
+        b.classList.toggle("selected", signSet.has(w.id));
       });
       return b;
     });
 
     const note = el("textarea", { class: "input", placeholder: "Describe the change (optional)" });
-    const micBtn = el("button", { class: "mic-btn", "aria-label": "Speak", onClick: speak }, "🎤");
-    if (!voiceService.isSupported()) micBtn.disabled = true;
-
-    async function speak() {
-      try {
-        const { transcript } = await voiceService.listenOnce({
-          lang: speechLocale(getLanguage()),
-          onStart: () => micBtn.classList.add("listening"),
-          onEnd: () => micBtn.classList.remove("listening"),
-        });
-        note.value = (note.value ? note.value + " " : "") + transcript;
-      } catch { micBtn.classList.remove("listening"); }
-    }
+    const micStatus = el("p", { class: "subtle center mic-status", text: "Tap the mic and speak, or type." });
+    const { button: micBtn } = voiceService.createMicWidget({
+      language: getLanguage(),
+      getBaseText: () => note.value,
+      onText: (text) => { note.value = text; },
+      onStatus: (m) => { micStatus.textContent = m; },
+    });
 
     const error = el("p", { class: "error-text", text: "" });
 
     async function submit() {
       try {
+        // Expand categories into the critical sign ids the rules understand.
+        const warningSigns = [];
+        signSet.forEach((id) => {
+          const cat = WARNING_SIGNS.find((w) => w.id === id);
+          if (cat) warningSigns.push(...cat.maps);
+        });
         await api.submitUpdate(sessionId, {
           trend,
-          severity: Number(slider.value),
+          severity,
           description: note.value.trim(),
-          warningSigns: [...signSet],
+          warningSigns,
           immediateHelp: false,
         });
         // If a critical sign was reported, still strongly advise staff contact.
@@ -114,16 +123,19 @@ export async function renderStatus(sessionId) {
     panel.innerHTML = "";
     panel.appendChild(el("div", { class: "stack" }, [
       el("h2", { text: "How severe is it now?" }),
-      slider,
-      el("p", { class: "center" }, [el("span", { text: "Selected: " }), severityOut, el("span", { text: " / 10" })]),
+      scale,
+      el("div", { class: "severity-legend row-between" }, [
+        el("span", { class: "subtle", text: "None" }),
+        el("span", { class: "subtle", text: "Worst" }),
+      ]),
       el("h2", { text: "Any of these now?" }),
       el("div", { class: "grid-options" }, signButtons),
       el("label", { text: "Describe the change" }),
       note,
-      el("div", { class: "center stack" }, [micBtn, el("p", { class: "subtle", text: "Tap to speak" })]),
+      el("div", { class: "mic-block center stack" }, [micBtn, micStatus]),
       error,
       el("div", { class: "row" }, [
-        el("button", { class: "btn btn-outline", onClick: showUpdateChoices }, "← Back"),
+        el("button", { class: "btn btn-outline", onClick: showUpdateChoices }, "Back"),
         el("button", { class: "btn btn-primary", style: "flex:1", onClick: submit }, "Send update"),
       ]),
     ]));

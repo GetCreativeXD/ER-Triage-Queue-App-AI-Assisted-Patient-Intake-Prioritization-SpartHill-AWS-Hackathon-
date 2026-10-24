@@ -8,25 +8,34 @@
 
 /* ---- Design tokens --------------------------------------------------- */
 :root {
-  --color-bg: #f4f7fb;
+  --color-bg: #eef2f9;
+  --color-bg-grad: radial-gradient(1200px 600px at 50% -10%, #e8f0ff 0%, #eef2f9 55%);
   --color-surface: #ffffff;
-  --color-border: #d6deea;
-  --color-text: #14233b;
+  --color-border: #e1e8f2;
+  --color-text: #0f1e33;
   --color-text-muted: #5a6b84;
-  --color-primary: #1565c0;      /* calm hospital blue */
-  --color-primary-dark: #0d47a1;
+  --color-primary: #1b6ef3;      /* modern medical blue */
+  --color-primary-dark: #1557c0;
+  --color-primary-soft: #e8f0ff;
   --color-focus: #ff8f00;
+  --mic-red: #d62828;            /* red microphone */
 
   /* Priority palette (always paired with a text label in the UI). */
-  --p-immediate: #b71c1c;
-  --p-very-urgent: #e64a19;
+  --p-immediate: #c62828;
+  --p-very-urgent: #ef6c00;
   --p-urgent: #f9a825;
   --p-standard: #2e7d32;
-  --p-low: #546e7a;
+  --p-low: #607d8b;
 
-  --radius: 14px;
-  --radius-sm: 8px;
-  --shadow: 0 4px 16px rgba(20, 35, 59, 0.08);
+  /* Severity scale colors: green -> yellow/orange -> red. */
+  --sev-safe: #2e9e4f;
+  --sev-moderate: #f4a62a;
+  --sev-danger: #d62828;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 10px 30px rgba(20, 35, 59, 0.10);
+  --shadow-sm: 0 2px 8px rgba(20, 35, 59, 0.06);
   --gap: 16px;
   --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
 }
@@ -38,6 +47,8 @@ html, body {
   margin: 0;
   padding: 0;
   background: var(--color-bg);
+  background-image: var(--color-bg-grad);
+  background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font);
   font-size: 17px;          /* readable base size for stressed users */
@@ -91,42 +102,60 @@ h2 { font-size: 1.3rem; margin: 0 0 8px; }
 }
 .btn:active { transform: scale(0.98); }
 
-.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-primary { background: var(--color-primary); color: #fff; box-shadow: 0 6px 16px rgba(27, 110, 243, 0.28); }
 .btn-primary:hover { background: var(--color-primary-dark); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
 
-.btn-outline { background: var(--color-surface); border-color: var(--color-border); }
+.btn-outline { background: var(--color-surface); border-color: var(--color-border); box-shadow: var(--shadow-sm); }
 .btn-outline:hover { border-color: var(--color-primary); }
+
+/* Selected state for choice/multi-choice buttons (filled, clear contrast). */
+.btn.choice.selected {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
 
 .btn-danger { background: var(--p-immediate); color: #fff; }
 
 .btn-block { width: 100%; }
 .btn-lg { min-height: 64px; font-size: 1.2rem; }
 
-/* Circular microphone button used on the welcome + intake screens. */
+/* Circular microphone button: RED circle with a WHITE icon (always), pulsing
+   while the patient is speaking. Sits below every question. */
 .mic-btn {
-  width: 84px;
-  height: 84px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
-  border: 3px solid var(--color-primary);
-  background: var(--color-surface);
-  color: var(--color-primary);
-  font-size: 2rem;
+  border: none;
+  background: var(--mic-red);
+  color: #fff;                 /* white mic icon */
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 6px 18px rgba(214, 40, 40, 0.35);
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
 }
+.mic-btn:hover { transform: translateY(-1px); }
+.mic-btn:disabled { background: var(--color-border); color: #fff; box-shadow: none; cursor: not-allowed; }
+.mic-btn .mic-icon { color: #fff; }
 .mic-btn.listening {
-  background: var(--p-immediate);
-  color: #fff;
-  border-color: var(--p-immediate);
-  animation: pulse 1.2s infinite;
+  background: var(--mic-red);
+  animation: pulse 1.1s infinite;
 }
+.mic-btn.listening .mic-icon { animation: icon-pulse 1.1s infinite; }
 @keyframes pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(183, 28, 28, 0.5); }
-  70%  { box-shadow: 0 0 0 16px rgba(183, 28, 28, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(183, 28, 28, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(214, 40, 40, 0.55); }
+  70%  { box-shadow: 0 0 0 20px rgba(214, 40, 40, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 40, 40, 0); }
 }
+@keyframes icon-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
+.mic-block { margin-top: 8px; }
+.mic-status { min-height: 1.4em; }
 
 /* ---- Form controls --------------------------------------------------- */
 .field { margin-bottom: var(--gap); }
@@ -254,4 +283,86 @@ textarea.input { min-height: 120px; resize: vertical; }
   .nurse-layout { grid-template-columns: 1fr; }
   .app-root { padding: 16px 14px 48px; }
   h1 { font-size: 1.5rem; }
+}
+
+/* =========================================================================
+   Modernized patient-flow components
+   ========================================================================= */
+
+/* Patient flow cards are centered and comfortably narrow on large screens. */
+.welcome-card, .done-card { max-width: 560px; margin: 24px auto; text-align: center; }
+.brand-mark {
+  width: 64px; height: 64px; margin: 0 auto 8px;
+  border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 8px 20px rgba(27, 110, 243, 0.3);
+}
+
+/* Language dropdown. */
+.lang-select {
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-align: center;
+  text-align-last: center;
+}
+
+/* ---- Severity: colored circular buttons ----------------------------- */
+.severity-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.severity-dot {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.severity-dot[data-level="safe"]     { background: var(--sev-safe); }
+.severity-dot[data-level="moderate"] { background: var(--sev-moderate); color: #3a2a00; }
+.severity-dot[data-level="danger"]   { background: var(--sev-danger); }
+.severity-dot:hover { transform: translateY(-2px); }
+.severity-dot.selected {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-text);
+}
+.severity-legend { margin-top: 4px; }
+
+/* ---- Success check (green circle + white tick) + patient number ----- */
+.success-check { display: flex; justify-content: center; }
+.success-circle {
+  width: 128px; height: 128px;
+  border-radius: 50%;
+  background: var(--p-standard);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 28px rgba(46, 125, 50, 0.4);
+  animation: pop-in 0.4s ease;
+}
+@keyframes pop-in {
+  0%   { transform: scale(0.6); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.patient-number {
+  font-size: 4.2rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+/* ---- Staff header actions ------------------------------------------- */
+.btn.btn-outline[href] { text-decoration: none; }
+
+@media (max-width: 860px) {
+  .patient-number { font-size: 3.2rem; }
+  .severity-dot { width: 46px; height: 46px; }
 }

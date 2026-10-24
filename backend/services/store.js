@@ -21,7 +21,19 @@ const state = {
   updates: [],
   notifications: [],
   audit: [],
+  // Rolling counter for 4-digit patient numbers. Starts at 0; the first
+  // allocated number is 1. Resets to 0 after reaching 10,000 (so numbers go
+  // 1..9999, then 0001 again).
+  patientCounter: 0,
 };
+
+/** Highest patient number before the counter rolls over. */
+const PATIENT_NUMBER_MAX = 10000;
+
+/** Format a raw counter value as a 4-digit, zero-padded string. */
+function formatPatientNumber(n) {
+  return String(n).padStart(4, "0");
+}
 
 /** Load any previously persisted demo state (browser only). */
 function load() {
@@ -47,6 +59,37 @@ function save() {
 load();
 
 export const store = {
+  // ---- Patient numbers -------------------------------------------------
+  /**
+   * Allocate the next unique 4-digit patient number as a zero-padded string.
+   * Numbers are issued in ascending order (0001, 0002, ...), reset to 0001
+   * after reaching 10,000, and never repeat a number that is still in use by
+   * an active (not completed / not unavailable) session.
+   */
+  nextPatientNumber() {
+    const activeNumbers = new Set(
+      state.sessions
+        .filter((s) => !["completed", "unavailable"].includes(s.status))
+        .map((s) => s.patientNumber)
+        .filter(Boolean)
+    );
+
+    // Advance the counter until we land on a number not currently in use.
+    // Bounded by PATIENT_NUMBER_MAX attempts so a full queue can't loop forever.
+    for (let attempts = 0; attempts < PATIENT_NUMBER_MAX; attempts++) {
+      state.patientCounter += 1;
+      if (state.patientCounter >= PATIENT_NUMBER_MAX) state.patientCounter = 1; // roll 10000 -> 0001
+      const candidate = formatPatientNumber(state.patientCounter);
+      if (!activeNumbers.has(candidate)) {
+        save();
+        return candidate;
+      }
+    }
+    // Extremely unlikely fallback (10,000 concurrent active patients): reuse.
+    save();
+    return formatPatientNumber(state.patientCounter);
+  },
+
   // ---- Sessions --------------------------------------------------------
   addSession(session) { state.sessions.push(session); save(); return session; },
   getSession(id) { return state.sessions.find((s) => s.id === id) || null; },
@@ -88,7 +131,8 @@ export const store = {
   auditForSession(sessionRef) { return state.audit.filter((a) => a.sessionRef === sessionRef); },
 
   // ---- Demo controls ---------------------------------------------------
-  /** Replace everything with a fresh seed set. */
+  /** Replace everything with a fresh seed set. The patient-number counter is
+   *  intentionally NOT reset, so re-seeding keeps issuing fresh numbers. */
   reset(seed = {}) {
     state.sessions = seed.sessions || [];
     state.intake = seed.intake || [];

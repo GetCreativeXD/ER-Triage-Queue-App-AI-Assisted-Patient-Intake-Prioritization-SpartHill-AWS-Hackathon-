@@ -4,7 +4,7 @@
 // Centralizes feature flags and AWS settings. In a Node server these would be
 // read from process.env (see .env.example). In this file-only demo build the
 // AWS features default to disabled, which triggers the demo-mode fallbacks in
-// lexService and bedrockService. Flip the flags (or supply real env vars in a
+// transcribeService and bedrockService. Flip the flags (or supply real env vars in a
 // Node deployment) to enable the live integrations.
 // =========================================================================
 
@@ -20,11 +20,17 @@ export const config = {
   aws: {
     region: env("AWS_REGION", "us-east-1"),
 
-    // Amazon Lex (voice intake). Disabled => demo mode.
-    lexEnabled: env("LEX_ENABLED", "false") === "true",
-    lexBotId: env("LEX_BOT_ID", ""),
-    lexBotAliasId: env("LEX_BOT_ALIAS_ID", ""),
-    lexLocaleId: env("LEX_LOCALE_ID", "en_US"),
+    // Amazon Transcribe (voice intake -> accurate speech-to-text).
+    // Disabled => demo mode (server returns "voice unavailable" so the UI
+    // falls back to typed input / the browser's on-device Web Speech API).
+    transcribeEnabled: env("TRANSCRIBE_ENABLED", "false") === "true",
+    // Use Amazon Transcribe Medical (clinical vocabulary) when "true".
+    // Falls back to standard Transcribe otherwise.
+    transcribeMedical: env("TRANSCRIBE_MEDICAL", "false") === "true",
+    // Medical specialty (PRIMARYCARE is the broadest; good default for ER intake).
+    transcribeMedicalSpecialty: env("TRANSCRIBE_MEDICAL_SPECIALTY", "PRIMARYCARE"),
+    // Expected sample rate of the uploaded PCM audio, in hertz.
+    transcribeSampleRate: Number(env("TRANSCRIBE_SAMPLE_RATE", "16000")),
 
     // Amazon Bedrock (AI summaries/explanations). Disabled => raw answers.
     bedrockEnabled: env("BEDROCK_ENABLED", "false") === "true",

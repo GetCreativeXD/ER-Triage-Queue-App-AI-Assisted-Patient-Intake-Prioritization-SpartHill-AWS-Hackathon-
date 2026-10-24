@@ -1,0 +1,139 @@
+/* =========================================================================
+   ER Triage native app - mobile-first design system
+   ========================================================================= */
+:root {
+  --bg: #0f1726;
+  --surface: #17202f;
+  --surface-2: #1e293b;
+  --border: #2a3444;
+  --text: #eaf0f8;
+  --muted: #9fb0c6;
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+
+  --p-immediate: #ef4444;
+  --p-very-urgent: #f97316;
+  --p-urgent: #eab308;
+  --p-standard: #22c55e;
+  --p-low: #64748b;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font); font-size: 16px; line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- App chrome ------------------------------------------------------- */
+.app-header {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.app-title { font-size: 1.25rem; font-weight: 800; letter-spacing: 0.02em; }
+.icon-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; }
+
+.view { padding: 16px; padding-bottom: 96px; }
+
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: flex; background: var(--surface); border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  flex: 1; background: none; border: none; color: var(--muted);
+  padding: 14px 0; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+}
+.tab.active { color: var(--primary); box-shadow: inset 0 3px 0 var(--primary); }
+
+/* ---- Cards & text ----------------------------------------------------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
+}
+.center { text-align: center; }
+.muted { color: var(--muted); }
+.empty { text-align: center; color: var(--muted); padding: 40px 18px; }
+.error h2 { color: var(--p-immediate); }
+h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.section-label { margin: 16px 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+/* ---- Summary stats ---------------------------------------------------- */
+.statbar { display: flex; gap: 10px; margin-bottom: 14px; }
+.stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+.stat-num { font-size: 1.6rem; font-weight: 800; }
+.stat-label { font-size: 0.75rem; color: var(--muted); }
+.stat.danger .stat-num { color: var(--p-immediate); }
+
+/* ---- Queue list ------------------------------------------------------- */
+.queue-list { display: flex; flex-direction: column; gap: 10px; }
+.queue-row {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-left: 6px solid var(--p-low);
+  border-radius: var(--radius-sm); padding: 14px; cursor: pointer;
+}
+.queue-row.prio-immediate-review { border-left-color: var(--p-immediate); }
+.queue-row.prio-very-urgent      { border-left-color: var(--p-very-urgent); }
+.queue-row.prio-urgent           { border-left-color: var(--p-urgent); }
+.queue-row.prio-standard         { border-left-color: var(--p-standard); }
+.queue-row.prio-low-urgency      { border-left-color: var(--p-low); }
+.queue-row.changed { background: #26211a; }
+.qr-num { font-size: 1.35rem; font-weight: 800; min-width: 68px; }
+.qr-main { flex: 1; min-width: 0; }
+.qr-name { font-weight: 700; }
+.qr-sub { font-size: 0.85rem; color: var(--muted); }
+.chip { background: var(--p-very-urgent); color: #1b1200; font-size: 0.72rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
+
+/* ---- Detail card ------------------------------------------------------ */
+.detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.detail-num { font-size: 1.5rem; font-weight: 800; }
+.pill { padding: 5px 12px; border-radius: 999px; font-weight: 800; font-size: 0.8rem; color: #0b0f17; }
+.pill.prio-immediate-review { background: var(--p-immediate); color: #fff; }
+.pill.prio-very-urgent      { background: var(--p-very-urgent); }
+.pill.prio-urgent           { background: var(--p-urgent); }
+.pill.prio-standard         { background: var(--p-standard); }
+.pill.prio-low-urgency      { background: var(--p-low); color: #fff; }
+.reason { margin: 10px 0; color: var(--muted); }
+.summary { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; margin: 8px 0; }
+.kv { display: flex; gap: 8px; padding: 4px 0; font-size: 0.9rem; }
+.kv .k { color: var(--muted); min-width: 120px; }
+.kv .v { flex: 1; }
+
+/* ---- Buttons ---------------------------------------------------------- */
+.row { display: flex; gap: 10px; align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.btn {
+  min-height: 46px; padding: 10px 16px; border-radius: var(--radius-sm);
+  font-size: 0.95rem; font-weight: 700; border: 1px solid transparent; cursor: pointer;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:active { background: var(--primary-dark); }
+.btn-outline { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.btn-text { background: none; color: var(--muted); border: none; width: 100%; margin-top: 10px; }
+.select {
+  min-height: 46px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  font-size: 0.95rem; flex: 1;
+}
+
+/* ---- QR tab ----------------------------------------------------------- */
+.qr-card { padding: 24px 18px; }
+.qr-holder {
+  display: inline-block; background: #fff; padding: 16px;
+  border-radius: var(--radius-sm); margin: 18px auto;
+}
+.qr-url { word-break: break-all; font-size: 0.85rem; }
+
+/* ---- Settings sheet --------------------------------------------------- */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; z-index: 100; }
+.sheet { background: var(--surface); width: 100%; border-radius: 20px 20px 0 0; padding: 22px 18px calc(env(safe-area-inset-bottom) + 22px); }
+.sheet .select { width: 100%; margin: 10px 0; }

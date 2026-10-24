@@ -9,9 +9,8 @@
 
 import { api } from "./services/apiClient.js";
 import { renderWelcome } from "./screens/welcome.js";
-import { renderSessionCode } from "./screens/sessionCode.js";
 import { renderIntake } from "./screens/intake.js";
-import { renderConfirm } from "./screens/confirm.js";
+import { renderDone } from "./screens/done.js";
 import { renderStatus } from "./screens/status.js";
 import { renderNurse } from "./screens/nurse.js";
 
@@ -24,9 +23,8 @@ api.ensureSeed();
  */
 const routes = {
   "/welcome": renderWelcome,
-  "/session": renderSessionCode,
   "/intake": renderIntake,     // #/intake/:sessionId
-  "/confirm": renderConfirm,   // #/confirm/:sessionId
+  "/done": renderDone,         // #/done/:sessionId  (success + patient number)
   "/status": renderStatus,     // #/status/:sessionId
   "/nurse": renderNurse,
 };

@@ -104,10 +104,12 @@ function queueCard(queue) {
   }
 
   const rows = queue.map((q) => {
+    const name = [q.firstName, q.lastName].filter(Boolean).join(" ") || "—";
     const tr = el("tr", { class: q.needsNurseReview ? "needs-review" : "", onClick: () => { selectedId = q.sessionId; draw(); } }, [
       el("td", { text: String(q.position) }),
+      el("td", {}, [el("strong", { text: "#" + (q.patientNumber || "----") })]),
       el("td", {}, [
-        el("strong", { text: q.sessionCode }),
+        el("span", { text: name }),
         q.needsNurseReview ? el("span", { class: "badge badge-changed", style: "margin-left:8px", text: "Changed" }) : null,
       ]),
       el("td", {}, [priorityBadge(q.priority)]),
@@ -122,7 +124,7 @@ function queueCard(queue) {
     el("h2", { text: "Priority queue" }),
     el("table", { class: "queue-table" }, [
       el("thead", {}, [
-        el("tr", {}, ["#", "Patient", "Priority", "Trend", "Waiting", "Last update"].map((h) => el("th", { text: h }))),
+        el("tr", {}, ["#", "Patient #", "Name", "Priority", "Trend", "Waiting", "Last update"].map((h) => el("th", { text: h }))),
       ]),
       el("tbody", {}, rows),
     ]),
@@ -155,20 +157,28 @@ function detailPanel(detail) {
       )
     : [el("p", { class: "subtle", text: "No updates yet." })];
 
-  // Status action buttons.
+  // Status action buttons — short, specific verbs.
   const statusBtn = (label, status) =>
     el("button", { class: "btn btn-outline", onClick: async () => { await api.setStatus(session.id, status); draw(); } }, label);
 
+  const name = [session.firstName, session.lastName].filter(Boolean).join(" ") || "Unnamed patient";
+
   return el("div", { class: "card stack" }, [
-    el("div", { class: "row-between" }, [el("h2", { text: session.sessionCode }), priorityBadge(session.currentPriority)]),
+    el("div", { class: "row-between" }, [
+      el("div", {}, [
+        el("h2", { text: "#" + (session.patientNumber || "----") }),
+        el("div", { class: "subtle", text: name }),
+      ]),
+      priorityBadge(session.currentPriority),
+    ]),
 
     el("p", {}, [el("strong", { text: "Why this priority: " }), el("span", { text: session.priorityReason || "—" })]),
-    el("p", { class: "subtle", text: "System recommendation — confirm or override below." }),
+    el("p", { class: "subtle", text: "System recommendation — accept it or sort patients below." }),
 
-    // Confirm / override controls.
+    // Accept recommendation / sort patients (one-tap change of priority).
     el("div", { class: "row" }, [
-      el("button", { class: "btn btn-primary", onClick: async () => { await api.confirmPriority(session.id); draw(); } }, "Confirm"),
-      overrideSelect(session.id),
+      el("button", { class: "btn btn-primary", onClick: async () => { await api.confirmPriority(session.id); draw(); } }, "Accept priority"),
+      sortPatientsSelect(session.id),
     ]),
 
     el("h2", { text: "Intake summary" }),
@@ -178,25 +188,26 @@ function detailPanel(detail) {
     el("h2", { text: "Update timeline" }),
     ...timeline,
 
-    el("h2", { text: "Actions" }),
+    el("h2", { text: "Set status" }),
     el("div", { class: "row" }, [
-      statusBtn("Call", STATUS.CALLED),
-      statusBtn("Being seen", STATUS.BEING_SEEN),
+      statusBtn("Call now", STATUS.CALLED),
+      statusBtn("Start care", STATUS.BEING_SEEN),
       statusBtn("Recheck", STATUS.RECHECK),
-      statusBtn("Completed", STATUS.COMPLETED),
-      statusBtn("Unavailable", STATUS.UNAVAILABLE),
+      statusBtn("Finish", STATUS.COMPLETED),
+      statusBtn("Mark away", STATUS.UNAVAILABLE),
     ]),
   ]);
 }
 
-/** Dropdown to override the recommended priority. */
-function overrideSelect(sessionId) {
-  const select = el("select", { class: "input", style: "max-width:200px" }, [
-    el("option", { value: "", text: "Override to…" }),
-    ...Object.values(PRIORITY).map((p) => el("option", { value: p, text: p })),
+/** One-tap "Sort patients" control: changing the priority re-sorts the queue
+ *  immediately. Replaces the old multi-step "override" dropdown. */
+function sortPatientsSelect(sessionId) {
+  const select = el("select", { class: "input", style: "max-width:220px" }, [
+    el("option", { value: "", text: "Sort patients…" }),
+    ...Object.values(PRIORITY).map((p) => el("option", { value: p, text: "Set: " + p })),
   ]);
   select.addEventListener("change", async () => {
-    if (select.value) { await api.overridePriority(sessionId, select.value, "Nurse override from dashboard."); draw(); }
+    if (select.value) { await api.overridePriority(sessionId, select.value, "Nurse sorted from dashboard."); draw(); }
   });
   return select;
 }
