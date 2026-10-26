@@ -1,0 +1,8 @@
+{
+  "appId": "com.aws3.ertriage",
+  "appName": "ER Triage",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

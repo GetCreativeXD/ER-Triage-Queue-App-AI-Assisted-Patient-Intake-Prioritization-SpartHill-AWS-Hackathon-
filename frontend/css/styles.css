@@ -1,0 +1,419 @@
+/* =========================================================================
+   ER Triage Queue - Design System
+   -------------------------------------------------------------------------
+   Hospital-inspired, high-contrast, touch-friendly. Severity is never shown
+   by color alone: every colored badge/row also carries a text label or icon
+   (accessibility requirement from the concept doc).
+   ========================================================================= */
+
+/* ---- Design tokens --------------------------------------------------- */
+:root {
+  --color-bg: #eef2f9;
+  --color-bg-grad: radial-gradient(1200px 600px at 50% -10%, #e8f0ff 0%, #eef2f9 55%);
+  --color-surface: #ffffff;
+  --color-border: #e1e8f2;
+  --color-text: #0f1e33;
+  --color-text-muted: #5a6b84;
+  --color-primary: #1b6ef3;      /* modern medical blue */
+  --color-primary-dark: #1557c0;
+  --color-primary-soft: #e8f0ff;
+  --color-focus: #ff8f00;
+  --mic-red: #d62828;            /* red microphone */
+
+  /* Priority palette (always paired with a text label in the UI). */
+  --p-immediate: #c62828;
+  --p-very-urgent: #ef6c00;
+  --p-urgent: #f9a825;
+  --p-standard: #2e7d32;
+  --p-low: #607d8b;
+
+  /* Severity scale colors: green -> yellow/orange -> red. */
+  --sev-safe: #2e9e4f;
+  --sev-moderate: #f4a62a;
+  --sev-danger: #d62828;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 10px 30px rgba(20, 35, 59, 0.10);
+  --shadow-sm: 0 2px 8px rgba(20, 35, 59, 0.06);
+  --gap: 16px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+}
+
+/* ---- Base ------------------------------------------------------------ */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  background-image: var(--color-bg-grad);
+  background-attachment: fixed;
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 17px;          /* readable base size for stressed users */
+  line-height: 1.5;
+}
+
+/* Visible focus ring everywhere for keyboard + screen-reader users. */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.disclaimer-bar {
+  background: #fff3e0;
+  color: #7a4100;
+  text-align: center;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-bottom: 1px solid #ffe0b2;
+}
+
+.app-root {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+}
+
+/* ---- Typography helpers --------------------------------------------- */
+h1 { font-size: 1.8rem; margin: 0 0 8px; }
+h2 { font-size: 1.3rem; margin: 0 0 8px; }
+.subtle { color: var(--color-text-muted); }
+.center { text-align: center; }
+
+/* ---- Buttons --------------------------------------------------------- */
+/* Large touch targets (min 52px tall) for patient-facing screens. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 12px 22px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: transform 0.05s ease, box-shadow 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+
+.btn-primary { background: var(--color-primary); color: #fff; box-shadow: 0 6px 16px rgba(27, 110, 243, 0.28); }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+.btn-outline { background: var(--color-surface); border-color: var(--color-border); box-shadow: var(--shadow-sm); }
+.btn-outline:hover { border-color: var(--color-primary); }
+
+/* Selected state for choice/multi-choice buttons (filled, clear contrast). */
+.btn.choice.selected {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+.btn-danger { background: var(--p-immediate); color: #fff; }
+
+.btn-block { width: 100%; }
+.btn-lg { min-height: 64px; font-size: 1.2rem; }
+
+/* Circular microphone button: RED circle with a WHITE icon (always), pulsing
+   while the patient is speaking. Sits below every question. */
+.mic-btn {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: none;
+  background: var(--mic-red);
+  color: #fff;                 /* white mic icon */
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(214, 40, 40, 0.35);
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.mic-btn:hover { transform: translateY(-1px); }
+.mic-btn:disabled { background: var(--color-border); color: #fff; box-shadow: none; cursor: not-allowed; }
+.mic-btn .mic-icon { color: #fff; }
+.mic-btn.listening {
+  background: var(--mic-red);
+  animation: pulse 1.1s infinite;
+}
+.mic-btn.listening .mic-icon { animation: icon-pulse 1.1s infinite; }
+
+/* Compact mic used inline next to a single text field (e.g. each name box),
+   so the mic records ONLY into the field it sits beside. */
+.mic-btn-sm {
+  width: 48px;
+  height: 48px;
+  box-shadow: 0 4px 10px rgba(214, 40, 40, 0.3);
+  flex: 0 0 auto;
+}
+.mic-btn-sm .mic-icon { width: 20px; height: 20px; }
+.field-with-mic { display: flex; align-items: center; gap: 10px; }
+.field-with-mic .input { flex: 1 1 auto; }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(214, 40, 40, 0.55); }
+  70%  { box-shadow: 0 0 0 20px rgba(214, 40, 40, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 40, 40, 0); }
+}
+@keyframes icon-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
+.mic-block { margin-top: 8px; }
+.mic-status { min-height: 1.4em; }
+
+/* ---- Form controls --------------------------------------------------- */
+.field { margin-bottom: var(--gap); }
+.field label { display: block; font-weight: 600; margin-bottom: 6px; }
+
+.input {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.input:focus { border-color: var(--color-primary); outline: none; }
+
+textarea.input { min-height: 120px; resize: vertical; }
+.slider { width: 100%; height: 40px; }
+
+/* ---- Cards + layout -------------------------------------------------- */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+.card + .card { margin-top: var(--gap); }
+
+.stack > * + * { margin-top: var(--gap); }
+.row { display: flex; gap: var(--gap); flex-wrap: wrap; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: var(--gap); }
+.grid-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+/* ---- Badges + priority labels --------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+.badge-new { background: var(--color-primary); }
+.badge-changed { background: var(--p-very-urgent); }
+
+.priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  color: #fff;
+}
+.priority .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.9); }
+.priority[data-priority="Immediate review"] { background: var(--p-immediate); }
+.priority[data-priority="Very urgent"]      { background: var(--p-very-urgent); }
+.priority[data-priority="Urgent"]           { background: var(--p-urgent); color: #3a2a00; }
+.priority[data-priority="Standard"]         { background: var(--p-standard); }
+.priority[data-priority="Low urgency"]      { background: var(--p-low); }
+
+/* Trend labels */
+.trend-worsening { color: var(--p-immediate); font-weight: 700; }
+.trend-improving { color: var(--p-standard); font-weight: 700; }
+.trend-stable    { color: var(--color-text-muted); font-weight: 700; }
+
+/* ---- Nurse dashboard table ------------------------------------------ */
+.queue-table { width: 100%; border-collapse: collapse; }
+.queue-table th, .queue-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.queue-table tr.needs-review { background: #fff8e1; }
+.queue-table tbody tr:hover { background: #f0f5fc; cursor: pointer; }
+
+/* Two-column nurse layout: queue on the left, detail panel on the right. */
+.nurse-layout { display: grid; grid-template-columns: 1fr 360px; gap: var(--gap); align-items: start; }
+
+/* ---- Notifications --------------------------------------------------- */
+.notif {
+  border-left: 5px solid var(--color-primary);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.notif.high { border-left-color: var(--p-immediate); background: #fff5f5; }
+.notif.acknowledged { opacity: 0.5; }
+
+/* ---- Modal ----------------------------------------------------------- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10, 20, 35, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; z-index: 100;
+}
+.modal {
+  background: #fff; border-radius: var(--radius);
+  max-width: 480px; width: 100%; padding: 28px;
+  box-shadow: var(--shadow);
+}
+
+/* ---- Progress -------------------------------------------------------- */
+.progress { height: 8px; background: var(--color-border); border-radius: 999px; overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--color-primary); transition: width 0.2s ease; }
+
+/* ---- State helpers (loading / empty / error) ------------------------ */
+.state { text-align: center; padding: 40px 20px; color: var(--color-text-muted); }
+.state .icon { font-size: 2.4rem; display: block; margin-bottom: 8px; }
+.error-text { color: var(--p-immediate); font-weight: 600; }
+.success-text { color: var(--p-standard); font-weight: 600; }
+.hidden { display: none !important; }
+
+/* ---- Responsive: collapse to single column on tablets/phones -------- */
+@media (max-width: 860px) {
+  .nurse-layout { grid-template-columns: 1fr; }
+  .app-root { padding: 16px 14px 48px; }
+  h1 { font-size: 1.5rem; }
+}
+
+/* =========================================================================
+   Modernized patient-flow components
+   ========================================================================= */
+
+/* Patient flow cards are centered and comfortably narrow on large screens. */
+.welcome-card, .done-card { max-width: 560px; margin: 24px auto; text-align: center; }
+.brand-mark {
+  width: 72px; height: 72px; margin: 0 auto 8px;
+  display: block;
+  /* The logo is a self-contained orange square with a transparent canvas -
+     no background or box behind it. */
+  background: none;
+}
+
+/* Language dropdown. */
+.lang-select {
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-align: center;
+  text-align-last: center;
+}
+
+/* ---- "Welcome!" transition (language select -> first question) ------- */
+/* Full-screen overlay that fades/scales in, holds, then fades out before the
+   first intake question appears. The text is localized to the chosen
+   language by the welcome screen. */
+.welcome-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(900px 600px at 50% 40%, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.welcome-transition.show { opacity: 1; }
+.welcome-transition.leave { opacity: 0; }
+.welcome-transition-text {
+  color: #fff;
+  font-size: clamp(2.4rem, 9vw, 4.5rem);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-align: center;
+  transform: translateY(16px) scale(0.9);
+  opacity: 0;
+}
+.welcome-transition.show .welcome-transition-text {
+  animation: welcome-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes welcome-pop {
+  0%   { transform: translateY(16px) scale(0.9); opacity: 0; }
+  60%  { transform: translateY(0) scale(1.04); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+/* Respect reduced-motion: show the message without the pop/scale animation. */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-transition, .welcome-transition-text { transition: opacity 0.2s ease; }
+  .welcome-transition.show .welcome-transition-text { animation: none; opacity: 1; transform: none; }
+}
+
+/* ---- Severity: colored circular buttons ----------------------------- */
+.severity-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.severity-dot {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.severity-dot[data-level="safe"]     { background: var(--sev-safe); }
+.severity-dot[data-level="moderate"] { background: var(--sev-moderate); color: #3a2a00; }
+.severity-dot[data-level="danger"]   { background: var(--sev-danger); }
+.severity-dot:hover { transform: translateY(-2px); }
+.severity-dot.selected {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-text);
+}
+.severity-legend { margin-top: 4px; }
+
+/* ---- Success check (green circle + white tick) + patient number ----- */
+.success-check { display: flex; justify-content: center; }
+.success-circle {
+  width: 128px; height: 128px;
+  border-radius: 50%;
+  background: var(--p-standard);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 28px rgba(46, 125, 50, 0.4);
+  animation: pop-in 0.4s ease;
+}
+@keyframes pop-in {
+  0%   { transform: scale(0.6); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.patient-number {
+  font-size: 4.2rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+/* ---- Staff header actions ------------------------------------------- */
+.btn.btn-outline[href] { text-decoration: none; }
+
+@media (max-width: 860px) {
+  .patient-number { font-size: 3.2rem; }
+  .severity-dot { width: 46px; height: 46px; }
+}
